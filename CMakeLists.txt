@@ -21,21 +21,16 @@ include(CMakePackageConfigHelpers)
 #####################################################################
 ####################### Misc. Project Setup #########################
 #####################################################################
-project(jpc VERSION 0.1 LANGUAGES CXX)
+project(jump VERSION 0.1 LANGUAGES CXX)
 
 ### OPTIONS
-option(JPC_BUILD_TESTS "Build tests" ON)
-option(JPC_ENABLE_CUDA "Enable CUDA as a parallelization backend" ON)
+option(JUMP_BUILD_TESTS "Build tests" ON)
+option(JUMP_BUILD_EXAMPLES "Build examples" ON)
+option(JUMP_ENABLE_CUDA "Enable CUDA as a parallelization backend" ON)
 
-if(${JPC_BUILD_TESTS})
+if(${JUMP_BUILD_TESTS})
     include(GoogleTest)
     enable_testing()
-endif()
-if(${JPC_ENABLE_CUDA})
-    enable_language(CUDA)
-    message(STATUS "CUDA Version: ${CMAKE_CUDA_COMPILER_VERSION}")
-else()
-    message(STATUS "CUDA Disabled.")
 endif()
 
 add_library(${PROJECT_NAME} INTERFACE)
@@ -47,11 +42,43 @@ target_include_directories(${PROJECT_NAME} INTERFACE
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/${PROJECT_NAME}>
 )
 
+# Goal of these functions is to setup a target with libaries and definitions to
+# enable a particular backend, and no other links or includes
+# (wrt jump and it's dependencies) should be needed
+function(jump_target_cuda target_name)
+    enable_language(CUDA)
+    message(STATUS "CUDA Compiler Version: ${CMAKE_CUDA_COMPILER_VERSION}")
+    find_package(CUDA REQUIRED)
+    message(STATUS "CUDA Version: ${CUDA_VERSION}")
+
+    set_property(TARGET ${target_name} PROPERTY CUDA_SEPARABLE_COMPILATION ON)
+    target_compile_definitions(${target_name} PUBLIC JUMP_ENABLE_CUDA)
+    target_link_libraries(${target_name} jump ${CUDA_LIBRARIES})
+    target_include_directories(${target_name} PRIVATE ${CUDA_INCLUDE_DIRS})
+endfunction()
+
 #####################################################################
 ####################### Executables #################################
 #####################################################################
-add_executable(jpc_main src/main.cpp src/test.cu)
-target_link_libraries(jpc_main ${PROJECT_NAME})
+add_executable(jump_main src/main.cpp)
+jump_target_cuda(jump_main)
+
+if(${JUMP_BUILD_EXAMPLES})
+    add_executable(jump_array_examples src/examples/array_examples.cpp)
+    jump_target_cuda(jump_array_examples)
+
+    # add_executable(jump_shared_ptr_examples src/examples/shared_ptr_examples.cpp)
+    # jump_target_cuda(jump_shared_ptr_examples)
+endif()
+
+# set_source_files_properties(src/main.cpp PROPERTIES LANGUAGE CUDA)
+# set(NVCC_ARGS ${NVCC_ARGS} --expt-relaxed-constexpr -Xcudafe "--diag_suppress=20012 --display_error_number")
+# target_compile_options(jump_main PUBLIC $<$<COMPILE_LANGUAGE:CUDA>:${NVCC_ARGS}>)
+
+# set(NVCC_ARGS ${NVCC_ARGS} --expt-relaxed-constexpr -Xcudafe "--diag_suppress=20012 --display_error_number")
+# set_property(TARGET jump_main PROPERTY CUDA_SEPARABLE_COMPILATION ON)
+# target_compile_options(jump_main PUBLIC $<$<COMPILE_LANGUAGE:CUDA>:${NVCC_ARGS}>)
+# set_source_files_properties(src/main.cpp PROPERTIES LANGUAGE CUDA)
 
 #####################################################################
 ####################### Tests #######################################
