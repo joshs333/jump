@@ -238,13 +238,6 @@ struct class_interface {
     }
 }; /* struct class_interface */
 
-//! Types of memory buffers can be allocated to
-enum class memory {
-    HOST,
-    DEVICE,
-    UNIFIED
-};
-
 } /* namespace jump */
 
 #endif /* JUMP_DEVICE_INTERFACE_HPP_ */
