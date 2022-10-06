@@ -12,6 +12,7 @@
 
 // STD
 #include <cstddef>
+#include <stdexcept>
 #include <cstdio>
 #include <type_traits>
 
@@ -44,11 +45,11 @@ public:
 
     template<typename T = void>
     T* data() {
-        if constexpr(jump::on_device()) {
+        #if JUMP_ON_DEVICE
             return reinterpret_cast<T*>(device_data_);
-        } else {
+        #else
             return reinterpret_cast<T*>(host_data_);
-        }
+        #endif
     }
 
     template<typename T = void>

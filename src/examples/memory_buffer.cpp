@@ -15,19 +15,20 @@ void deviceOnlyFunc() {
 
 JUMP_INTEROPABLE
 void testPrint() {
-    if constexpr(jump::on_device()) {
+    #if JUMP_ON_DEVICE
         deviceOnlyFunc();
-        std::printf("Hello you! Device: %s\n", jump::on_device() ? "true" : "false");
-    } else {
-        std::printf("Hello you! Host: %s\n", jump::on_device() ? "true" : "false");
-    }
+        std::printf("Hello you! Device: %s\n", "true");
+    #else
+        std::printf("Hello yous! Host: %s\n", "false");
+    #endif
+    jump::device_thread_sync();
 }
 
 __global__
 void dummyKernel() {
+    std::printf("Heya you\n");
     testPrint();
     jump::device_thread_sync();
-    // __syncthreads();
 }
 
 int main(int argc, char** argv) {
@@ -40,6 +41,8 @@ int main(int argc, char** argv) {
     buff.allocate(10);
     buff.allocate<int>(10);
 
+    dummyKernel<<<1,1>>>();
+    cudaDeviceSynchronize();
 
     return 0;
 }

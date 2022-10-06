@@ -75,9 +75,9 @@ inline bool devices_available() {
         if(_device_count > 0)
             _cuda_available = true;
         return _cuda_available;
-    #else
+    } else {
         return false;
-    #endif
+    }
 
     // We don't need to do this because of static linkage - but if we wanted
     // we could do runtime library loading / checking
@@ -124,25 +124,28 @@ inline bool devices_available() {
 inline int device_count() {
     #ifdef JUMP_ENABLE_CUDA
         if(!_cuda_eval)
-            cuda_available();
+            devices_available();
         return _device_count;
     #else
         return 0;
     #endif
 } /* cuda_device_count() */
 
-/**
- * @brief allow a constexpr if instead of a macro call to determine
- *  if code is being executed on device
- * @return true if running on device, false if running on host
- **/
-constexpr bool on_device() {
-    #if JUMP_ON_DEVICE
-        return true;
-    #else
-        return false;
-    #endif
-} /* on_device() */
+// /**
+//  * @brief allow a constexpr if instead of a macro call to determine
+//  *  if code is being executed on device
+//  * @return true if running on device, false if running on host
+//  * @note the below works for cuda 11.7 at least... doesn't work for
+//  *   11.4 and below... so I'll not use it so I can target cuda 11.3
+//  *   and introduce it later on
+//  **/
+// constexpr bool on_device() {
+//     #if JUMP_ON_DEVICE
+//         return true;
+//     #else
+//         return false;
+//     #endif
+// } /* on_device() */
 
 /**
  * @brief adds a thread synchronization point that only
