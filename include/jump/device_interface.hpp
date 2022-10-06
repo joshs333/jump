@@ -12,6 +12,8 @@
 // possible for CUDA to be disabled at runtime if cudart is not available
 // or there are no GPU's detected
 #ifdef JUMP_ENABLE_CUDA
+    // #include <cuda.h>
+    // #include <device_functions.h>
     #include <cuda_runtime_api.h>
     #include <dlfcn.h>
 #endif
@@ -30,6 +32,7 @@
 
 // A slightly more friendly macro to check if code is being built
 // for device or host (check within a function)
+// NOTE: on_device() below is a cleaner way to if constexpr evaluate if running on device
 #ifdef __CUDA_ARCH__
     #define JUMP_ON_DEVICE true
 #else
@@ -47,11 +50,25 @@ bool _cuda_available = false;
 int _device_count = 0;
 
 /**
- * @brief function to determine if cuda is available at runtime
- * @return true or false if cuda is available
+ * @brief a constexpr evaluation of if CUDA is enabled
+ * @note even if cuda is enabled, there might not be devices to run on,
+ *  check that with devices_available()
+ * @return true or false if cuda is enabled based on definitions
  */
-inline bool cuda_available() {
+constexpr bool cuda_enabled() {
     #ifdef JUMP_ENABLE_CUDA
+        return true;
+    #else
+        return false;
+    #endif
+} /* cuda_enabled() */
+
+/**
+ * @brief function to determine if there are devices available at runtime
+ * @return true or false if the number of devices are non-zero
+ */
+inline bool devices_available() {
+    if constexpr(cuda_enabled()) {
         auto r = cudaGetDeviceCount(&_device_count);
         if(r != 0)
             return _cuda_available;
@@ -104,7 +121,7 @@ inline bool cuda_available() {
  * @brief gets the number of devices (GPU) detected by cuda
  * @return int the number of devices available
  */
-inline int cuda_device_count() {
+inline int device_count() {
     #ifdef JUMP_ENABLE_CUDA
         if(!_cuda_eval)
             cuda_available();
@@ -113,6 +130,41 @@ inline int cuda_device_count() {
         return 0;
     #endif
 } /* cuda_device_count() */
+
+/**
+ * @brief allow a constexpr if instead of a macro call to determine
+ *  if code is being executed on device
+ * @return true if running on device, false if running on host
+ **/
+constexpr bool on_device() {
+    #if JUMP_ON_DEVICE
+        return true;
+    #else
+        return false;
+    #endif
+} /* on_device() */
+
+/**
+ * @brief adds a thread synchronization point that only
+ *  works if code is executing on device
+ * @note it might be interesting to explore what these 
+ *  synchronization mechanisms might mean on host and
+ *  implement an interopable synchronization mechanism
+ **/
+JUMP_INTEROPABLE
+inline void device_thread_sync() {
+    // This doesn't work! Which is weird, it seems
+    // to work fine for switching between __host__ and
+    // __device__ functions, I guess because this is a
+    // primitive it's different?
+    // if constexpr(on_device()) {
+    //     __syncthreads();
+    // }
+    // Whatever, for this we will just do a macro if
+    #if JUMP_ON_DEVICE
+        __syncthreads();
+    #endif
+} /* device_thread_sync() */
 
 //! A few functions to help perform constexpr evaluation of types
 //! to determine compatibility / interfacing
@@ -187,7 +239,7 @@ struct kernel_interface {
      * @return true or false if the function is defined
      */
     static constexpr bool from_device_defined() {
-        return _device_interface_helpers::to_device_defined_test<T>::value;
+        return _device_interface_helpers::from_device_defined_test<T>::value;
     }
     
     /**
@@ -234,7 +286,7 @@ struct class_interface {
      * @return true or false if the function is defined
      */
     static constexpr bool from_device_defined() {
-        return _device_interface_helpers::to_device_defined_test<T>::value;
+        return _device_interface_helpers::from_device_defined_test<T>::value;
     }
 }; /* struct class_interface */
 
