@@ -1,678 +1,298 @@
-/**
- * @file multi_array.hpp
- * @author Joshua Spisak
- * @brief implementation of jump::multi_array (a 2d interopable array data-structure) and some helpers.
- * @date 2022-05-07
- */
 #ifndef JUMP_MULTI_ARRAY_HPP_
 #define JUMP_MULTI_ARRAY_HPP_
 
-#include "jump/cuda_interface.hpp"
-#include "jump/shared_ptr.hpp"
+// JUMP
+#include <jump/memory_buffer.hpp>
 
-//! top-level utils namespace
 namespace jump {
 
-//! An internal namespace for the multi_array class to use, this is very similar
-//! to shared_ptr_helpers... abstract to another header of shared_data_helpers.hpp?
 namespace multi_array_helpers {
 
-    //! Used to constexpr check if toGPU(T*) exists in a class
-    template <typename>
-    constexpr std::false_type toGPUDefinedT (long);
+//! Evaluate if a type can be cast to std::size_t (false evaluator)
+template<typename, typename O = void>
+struct can_be_size_t_eval : std::false_type {};
 
-    //! Used to constexpr check if toGPU(T*) exists in a class
-    template <typename T>
-    constexpr auto toGPUDefinedT (int)
-    -> decltype( std::declval<T>().toGPU(nullptr), std::true_type{} );
+//! Evaluate if a type can be cast to std::size_t (true evaluator)
+template<typename T>
+struct can_be_size_t_eval<T, std::void_t<decltype(static_cast<std::size_t>(std::declval<T&>()))> > : std::true_type {};
 
-    //! Used to constexpr check if toGPU() exists in a class
-    template <typename T>
-    using toGPUDefined = decltype( toGPUDefinedT<T>(0) );
-
-    //! Used to constexpr check if fromGPU(T*) exists in a class
-    template <typename>
-    constexpr std::false_type fromGPUDefinedT (long);
-
-    //! Used to constexpr check if fromGPU(T*) exists in a class
-    template <typename T>
-    constexpr auto fromGPUDefinedT (int)
-    -> decltype( std::declval<T>().fromGPU(nullptr), std::true_type{} );
-
-    //! Used to constexpr check if fromGPU(T*) exists in a class
-    template <typename T>
-    using fromGPUDefined = decltype( fromGPUDefinedT<T>(0) );
-
-
-    //! Used to constexpr check if toGPU(void) exists in a class
-    template <typename>
-    constexpr std::false_type toGPUVoidDefinedT (long);
-
-    //! Used to constexpr check if toGPU(void) exists in a class
-    template <typename T>
-    constexpr auto toGPUVoidDefinedT (int)
-    -> decltype( std::declval<T>().toGPU(), std::true_type{} );
-
-    //! Used to constexpr check if toGPU(void) exists in a class
-    template <typename T>
-    using toGPUVoidDefined = decltype( toGPUVoidDefinedT<T>(0) );
-
-    //! Used to constexpr check if fromGPU(void) exists in a class
-    template <typename>
-    constexpr std::false_type fromGPUVoidDefinedT (long);
-
-    //! Used to constexpr check if fromGPU(void) exists in a class
-    template <typename T>
-    constexpr auto fromGPUVoidDefinedT (int)
-    -> decltype( std::declval<T>().fromGPU(), std::true_type{} );
-
-    //! Used to constexpr check if fromGPU(void) exists in a class
-    template <typename T>
-    using fromGPUVoidDefined = decltype( fromGPUVoidDefinedT<T>(0) );
+//! Evaluate if a series of types can all be cast as std::size_t
+//! Returns true if all types can be safely cast, false if not
+template<typename Type, typename... Types>
+constexpr bool can_be_size_t() {
+    if constexpr(sizeof...(Types) > 0)
+        return can_be_size_t_eval<Type>::value && can_be_size_t<Types...>();
+    else
+        return can_be_size_t_eval<Type>::value;
+}
 
 } /* namespace multi_array_helpers */
 
-/**
- * @brief creates an multi_array that is shared across host and device or in unified memory
- * @tparam T underlaying type this is an multi_array of
- */
-template<typename T>
+template<typename T, std::size_t _max_dims = 4>
 class multi_array {
 public:
-    //! Utility type definition
-    using sptr = shared_ptr<multi_array>;
-
-    //! Make a shared pointer on the host
-    template<typename... Args>
-    static sptr ptr(Args&&... args) {
-        return make_shared_on<multi_array>(MemType::HOST, args...);
-    }
-
-    //! Help with template deduction :)
-    template<typename... Args>
-    static sptr ptr(std::initializer_list<std::initializer_list<T>>&& data, Args&&... args) {
-        return make_shared_on<multi_array>(MemType::HOST, data, args...);
-    }
-
-    //! Make a shared pointer in unified memory
-    template<typename... Args>
-    static sptr unified_ptr(Args&&... args) {
-        return make_shared_on<multi_array>(MemType::UNIFIED, args..., MemType::UNIFIED);
-    }
-
-    //! Help template deduction :)
-    template<typename... Args>
-    static sptr unified_ptr(std::initializer_list<std::initializer_list<T>>&& data, Args&&... args) {
-        return make_shared_on<multi_array>(MemType::UNIFIED, data, args..., MemType::UNIFIED);
-    }
-
-    //! Create a unified side pointer to a device side array
-    template<typename... Args>
-    static sptr device_ptr(Args&&... args) {
-        return make_shared_on<multi_array>(MemType::UNIFIED, args..., MemType::DEVICE);
-    }
-
-    //! Help template deduction :)
-    template<typename... Args>
-    static sptr device_ptr(std::initializer_list<std::initializer_list<T>>&& data, Args&&... args) {
-        return make_shared_on<multi_array>(MemType::UNIFIED, data, args..., MemType::DEVICE);
-    }
-
-    //! Create a host side pointer to a device side array
-    template<typename... Args>
-    static sptr host_to_device_ptr(Args&&... args) {
-        return make_shared_on<multi_array>(MemType::HOST, args..., MemType::DEVICE);
-    }
-
-    //! Help template deduction :)
-    template<typename... Args>
-    static sptr host_to_device_ptr(std::initializer_list<std::initializer_list<T>>&& data, Args&&... args) {
-        return make_shared_on<multi_array>(MemType::HOST, data, args..., MemType::DEVICE);
-    }
-
-    //! Provides a view of a section of data pointed to by the array
-    //! Can also be thought of as one of the rows in the array
-    //! but does not actually own the data - should be temporary
-    struct view {
-        //! Base pointer to index from (part of a larger array)
-        T* base;
-        //! Size of this section of memory
-        std::size_t size;
-        //! Steps per index
-        std::size_t step_size;
-
-        //! Provide an at operator into the memory (probably not used that much)
-        GPU_COMPATIBLE
-        T& at(
-            std::size_t index
-        ) const {
-            #if not ON_GPU
-                if(base == nullptr) throw std::runtime_error("base == nullptr, unable to index on CPU");
-                if(index >= size) throw std::out_of_range("index is out of range in multi_array view");
-            #endif
-
-            return *(base + index * step_size);
-        }
-
-        //! Provide an index operator into the memory
-        GPU_COMPATIBLE
-        T& operator[](std::size_t index) const {
-            #if not ON_GPU
-                if(base == nullptr) throw std::runtime_error("base == nullptr, unable to index on CPU");
-                if(index >= size) throw std::out_of_range("index is out of range in multi_array view");
-            #endif
-
-            return *(base + index * step_size);
-        }
-    }; /* struct view */
-
     /**
-     * @brief Construct an empty host multi_array
-     */
-    multi_array():
-        primary_location_(MemType::HOST),
-        data_(nullptr),
-        device_data_(nullptr),
-        size_x_(0),
-        size_y_(0)
-    {}
-
-    /**
-     * @brief Construct a new shared multi_array object from an initializer list
-     * @param data members to initialize data from
-     * @param location what memory to create this multi_array in
+     * @brief construct a new multi_array with the default initializer 
+     *  for contained objects
+     * @param dimensions the dimensions of the multi-array
+     * @param location memory second to allocate
      */
     multi_array(
-        const std::initializer_list<std::initializer_list<T>>& data,
-        MemType location = MemType::HOST
-    ):
-        primary_location_(location),
-        data_(nullptr),
-        device_data_(nullptr),
-        size_x_(data.size()),
-        size_y_(0)
-    {
-        if(size_x_ > 0) {
-            std::size_t size = 0;
-            bool set = false;
+        const std::initializer_list<std::size_t>& dimensions,
+        const memory_t& location = memory_t::HOST
+    ) {
+        allocate(dimensions, location);
 
-            for(auto& arr : data) {
-                if(!set) {
-                    size = arr.size();
-                    set = true;
-                }
-                if(arr.size() > size) size = arr.size();
-            }
-            size_y_ = size;
-        }
 
-        allocate();
-
-        if(primary_location_ == MemType::DEVICE) {
-            #if CUDA_AVAILABLE
-                std::size_t i = 0;
-                for(auto& arr : data) {
-                    std::size_t j = 0;
-                    for(auto& obj : arr) {
-                        cudaMemcpy(device_data_ + i * size_y_ + j, &obj, sizeof(T), cudaMemcpyHostToDevice);
-                        ++j;
-                    }
-                    ++i;
-                }
-            #endif
-        } else {
-            std::size_t i = 0;
-            for(auto& arr : data) {
-                std::size_t j = 0;
-                for(auto& obj : arr) {
-                    new(&data_[i * size_y_ + j]) T(obj);
-                    ++j;
-                }
-                ++i;
-            }
-        }
+        for(auto i = 0; i < size(); ++i)
+            new(&buffer_.data<T>()[i]) T();
     }
-    
     /**
-     * @brief Construct a new shared multi_array object with a fixed size, no construction of objects
-     * @param size_x of the multi_array
-     * @param size_y of the multi_array
-     * @param location what memory to create this multi_array in
+     * @brief construct a new multi_array initializing members from a
+     *  default value as specified
+     * @param dimensions the dimensions of the multi-array
+     * @param default_value the default value to intialize members from
+     * @param location memory second to allocate
      */
     multi_array(
-        std::size_t size_x,
-        std::size_t size_y,
-        MemType location = MemType::HOST
-    ):
-        primary_location_(location),
-        data_(nullptr),
-        device_data_(nullptr),
-        size_x_(size_x),
-        size_y_(size_y)
-    {
-        allocate();
-
-        // No construction / initialization to do
-    }
-    
-    /**
-     * @brief Construct a new shared multi_array object of a size with a default value
-     * @param size number of elements in multi_array
-     * @param default_value the default value to initialize all elements from
-     * @param location where to construct the multi_array
-     */
-    multi_array(
-        std::size_t size_x,
-        std::size_t size_y,
+        const std::initializer_list<std::size_t>& dimensions,
         const T& default_value,
-        MemType location = MemType::HOST
-    ):
-        primary_location_(location),
-        data_(nullptr),
-        device_data_(nullptr),
-        size_x_(size_x),
-        size_y_(size_y)
-    {
-        allocate();
+        const memory_t& location = memory_t::HOST
+    ) {
+        allocate(dimensions, location);
 
-        // Mixed messaging over whether this is the right move
-        // https://stackoverflow.com/questions/22345391/cuda-device-memory-copies-cudamemcpydevicetodevice-vs-copy-kernel
-        if(primary_location_ == MemType::DEVICE) {
-            #if CUDA_AVAILABLE
-                for(std::size_t i = 0; i < size_x_; ++i) {
-                    for(std::size_t j = 0; j < size_y_; ++j) {
-                        cudaMemcpy(device_data_ + i * size_y_ + j, &default_value, sizeof(T), cudaMemcpyHostToDevice);
-                    }
-                }
-            #endif
-        } else {
-            for(std::size_t i = 0; i < size_x_; ++i) {
-                for(std::size_t j = 0; j < size_y_; ++j) {
-                    new(&data_[i * size_y_ + j]) T(default_value);
-                }
-            }
-        }
+        for(auto i = 0; i < size(); ++i)
+            buffer_.data<T>()[i] = default_value;
     }
 
     /**
-     * @brief Construct a new shared multi_array object via a copy constructor
-     * @param obj object to copy from
+     * @brief copy-construct a new multi_array
+     * @param arr the array to copy from
+     * @note after this operation the new multi_array and arr
+     *  will share ownership of the underlying data
      */
-    multi_array(const multi_array& obj):
-        primary_location_(obj.primary_location_),
-        data_(nullptr),
-        device_data_(nullptr),
-        size_x_(obj.size_x_),
-        size_y_(obj.size_y_)
+    multi_array(const multi_array& arr):
+        buffer_(arr.buffer_),
+        dims_(arr.dims_)
     {
-        allocate();
-
-        if(primary_location_ != MemType::DEVICE) {
-            for(std::size_t i = 0; i < size_x_; ++i) {
-                for(std::size_t j = 0; j < size_y_; ++j) {
-                    new(&data_[i * size_y_ + j]) T(obj.data_[i * size_y_ + j]);
-                }
-            }
-        } else {
-            // Mixed messaging over whether this is the right move
-            // https://stackoverflow.com/questions/22345391/cuda-device-memory-copies-cudamemcpydevicetodevice-vs-copy-kernel
-            #if CUDA_AVAILABLE
-                cudaMemcpy(device_data_, obj.device_data_, sizeof(T) * size_x_ * size_y_, cudaMemcpyDeviceToDevice);
-            #endif
-        }
-
-        if(primary_location_ == MemType::HOST && obj.device_data_ != nullptr) {
-            toGPU();
-        }
-        if(primary_location_ == MemType::DEVICE && obj.data_ != nullptr) {
-            fromGPU();
-        }
+        for(int i = 0; i < dims_; ++i)
+            size_[i] = arr.size_[i];
     }
-
 
     /**
-     * @brief Construct a new shared multi_array object via a copy constructor
-     * @param obj object to copy from
+     * @brief move-construct a new multi_array
+     * @param arr the array to move from
      */
-    multi_array(multi_array&& obj):
-        primary_location_(obj.primary_location_),
-        data_(obj.data_),
-        device_data_(obj.device_data_),
-        size_x_(obj.size_x_),
-        size_y_(obj.size_y_)
+    multi_array(multi_array&& arr):
+        buffer_(std::move(arr.buffer_)),
+        dims_(arr.dims_)
     {
-        obj.primary_location_ = MemType::HOST;
-        obj.data_ = nullptr;
-        obj.device_data_ = nullptr;
-        obj.size_x_ = 0;
-        obj.size_y_ = 0;
-    }
-    
-    multi_array& operator=(const multi_array& obj)
-    {
-        deallocate();
-        primary_location_ = obj.primary_location_;
-        data_ = nullptr;
-        device_data_ = nullptr;
-        size_x_ = obj.size_x_;
-        size_y_ = obj.size_y_;
-        allocate();
-
-        if(primary_location_ != MemType::DEVICE) {
-            for(std::size_t i = 0; i < size_x_; ++i) {
-                for(std::size_t j = 0; j < size_y_; ++j) {
-                    new(&data_[i * size_y_ + j]) T(obj.data_[i * size_y_ + j]);
-                }
-            }
-        } else {
-            // THIS IS INEFFICIENT AF, but I'm lazy :)
-            // eventually make a kernel call that does a byte for byte copy
-            #if CUDA_AVAILABLE
-                cudaMemcpy(device_data_, obj.device_data_, sizeof(T) * size_x_ * size_y_, cudaMemcpyDeviceToDevice);
-            #endif
-        }
-
-        if(primary_location_ == MemType::HOST && obj.device_data_ != nullptr) {
-            toGPU();
-        }
-        if(primary_location_ == MemType::DEVICE && obj.data_ != nullptr) {
-            fromGPU();
-        }
-        return *this;
+        for(int i = 0; i < dims_; ++i)
+            size_[i] = arr.size_[i];
     }
 
-    multi_array& operator=(multi_array&& obj) {
-        primary_location_ = obj.primary_location_;
-        data_ = obj.data_;
-        device_data_ = obj.device_data_;
-        size_x_ = obj.size_x_;
-        size_y_ = obj.size_y_;
-
-        obj.primary_location_ = MemType::HOST;
-        obj.data_ = nullptr;
-        obj.device_data_ = nullptr;
-        obj.size_x_ = 0;
-        obj.size_y_ = 0;
+    /**
+     * @brief copy-assignment to this multi_array
+     * @param arr the array to copy from
+     * @return multi_array& this array which now shares ownership of data with arr
+     */
+    multi_array& operator=(const multi_array& arr) {
+        dereference_buffer();
+        buffer_ = arr.buffer_;
+        dims_ = arr.dims_;
+        for(int i = 0; i < dims_; ++i)
+            size_[i] = arr.size_[i];
         return *this;
     }
 
     /**
-     * @brief Destroy the shared multi_array object, deallocate any memory
+     * @brief move-assignment to this multi_array
+     * @param arr the array to copy from
+     * @return multi_array& this array which has taken ownership from arr
+     */
+    multi_array& operator=(multi_array&& arr) {
+        dereference_buffer();
+        buffer_ = std::move(arr.buffer_);
+        dims_ = arr.dims_;
+        for(int i = 0; i < dims_; ++i)
+            size_[i] = arr.size_[i];
+        return *this;
+    }
+
+    /**
+     * @brief destroy the object!
      */
     ~multi_array() {
-        deallocate();
+        dereference_buffer();
+    }
+    
+    /**
+     * @brief gets the number of dimensions of this multi_array
+     * @return std::size_t the number of dimensions 
+     */
+    JUMP_INTEROPABLE
+    std::size_t dims() {
+        return dims_;
     }
 
     /**
-     * @brief get the size of the multi_array
-     * @return std::size_t number of elements in multi_array
+     * @brief gets the shape of the array (size of a given dimension)
+     * @param dim the index of the dimension to get the size for,
+     *  must be <= dims();
+     * @return the size of dimension dim
      */
-    GPU_COMPATIBLE
-    std::size_t size() const {
-        return size_x_ * size_y_;
-    }
-
-    /**
-     * @brief get the size of the multi_array along a particular dimension
-     * @return std::size_t number of elements in multi_array
-     */
-    GPU_COMPATIBLE
-    std::size_t size(std::size_t dim) const {
-        if(dim == 0) return size_x_;
-        if(dim == 1) return size_y_;
-        return 0;
-    }
-
-    /**
-     * @brief get the size of the multi_array (primary dimension)
-     * @return std::size_t number of primary multi_arrays
-     */
-    GPU_COMPATIBLE
-    std::size_t size_x() const {
-        return size_x_;
-    }
-
-    /**
-     * @brief get the size of the multi_array (secondary dimension)
-     * @return std::size_t number of elements in multi_array
-     */
-    GPU_COMPATIBLE
-    std::size_t size_y() const {
-        return size_y_;
-    }
-
-    /**
-     * @brief directly access the data in the container
-     * @return const T* pointer to data
-     */
-    GPU_COMPATIBLE
-    T* data() const {
-        #if ON_GPU
-            return device_data_;
+    JUMP_INTEROPABLE
+    std::size_t shape(const std::size_t& dim) {
+        #if JUMP_ON_DEVICE
+            assert(dim < dims_);
         #else
-            return data_;
+            if (dim >= dims_)
+                throw std::out_of_range("dim " + std::to_string(dim) + " >= dims " + std::to_string(dims_));
         #endif
+        return size_[dim];
     }
 
     /**
-     * @brief directly access device data in the container
-     * @return const T* pointer to device data
+     * @brief gets the size (total number of all elements contained) of the multi_array
+     * @return the size 
      */
-    GPU_COMPATIBLE
-    T* data_device() const {
-        return device_data_;
+    JUMP_INTEROPABLE
+    std::size_t size() {
+        std::size_t result = 1;
+        for(std::size_t i = 0; i < dims_; ++i) {
+            result *= size_[i];
+        }
+        return result;
     }
-
-    GPU_COMPATIBLE
-    T& at(
-        std::size_t index_x,
-        std::size_t index_y
-    ) const {
-        #if ON_GPU
-            return device_data_[index_x + index_y * size_x_];
-        #else
-            if(data_ == nullptr) throw std::runtime_error("data_ == nullptr, unable to index on CPU");
-            if(index_x >= size_x_ || index_y >= size_y_) throw std::out_of_range("index is out of range in multi_array");
-            return data_[index_x + index_y * size_x_];
-        #endif
-    }
-
-
-
-    GPU_COMPATIBLE
-    view operator[](std::size_t index) const {
-        #if ON_GPU
-            view result;
-            result.base = device_data_ + index;
-            result.size = size_y_;
-            result.step_size = size_x_;
-            return result;
-        #else
-            if(data_ == nullptr) throw std::runtime_error("data_ == nullptr, unable to index on CPU");
-            if(index >= size_x_) throw std::out_of_range("index is out of range in multi_array");
-
-            view result;
-            result.base = data_ + index;
-            result.size = size_y_;
-            result.step_size = size_x_;
-            return result;
-        #endif
-    }
-
 
     /**
-     * @brief transfer data from HOST to DEVICE (no effect if UNIFIED)
+     * @brief access an element
+     * @tparam IndexT the type used to express index
+     * @param indices some series of indices to identify which element to access
+     * @return the element in the multi_array at indices by reference
      */
-    void fromGPU() {
-        #if CUDA_AVAILABLE
-            if (primary_location_ == MemType::DEVICE) {
-                if(data_ == nullptr) {
-                    data_ = static_cast<T*>(malloc(sizeof(T) * size_x_ * size_y_));
-                }
+    template<typename... IndexT>
+    JUMP_INTEROPABLE
+    T& at(const IndexT&... indices) {
+        static_assert(multi_array_helpers::can_be_size_t<IndexT...>(), "all IndexT must be castable to std::size_t");
+        // wrapping the rest in this constexpr cleans up the error output if the static_assert fails :)
+        if constexpr(multi_array_helpers::can_be_size_t<IndexT...>()) {
+            std::size_t current_dim = 0;
+            const std::size_t n = sizeof...(IndexT);
+            #if JUMP_ON_DEVICE
+                assert(n <= dims_ && "at() operator is requesting a dimension greater than is possible");
+            #else
+                if(n > dims_)
+                    throw std::out_of_range("requested dimensions " + std::to_string(n) + " >= dims " + std::to_string(dims_));
+            #endif
 
-                cudaMemcpy(data_, device_data_, sizeof(T) * size_x_ * size_y_, cudaMemcpyDeviceToHost);
-            } else if(primary_location_ == MemType::HOST) {
-                if(device_data_ == nullptr) {
-                    throw std::runtime_error("DEVICE memory is not allocated, unable to copy from GPU");
-                }
-                if constexpr(multi_array_helpers::fromGPUDefined<T>{}) {
-                    for(std::size_t i = 0; i < size_x_; ++i) {
-                        for(std::size_t j = 0; j < size_y_; ++j) {
-                            bool copy = true;
-                            copy = data_[i * size_y_ + j]->fromGPU(device_data_ + i * size_y_ + j);
-                            if(copy)
-                                cudaMemcpy(&data_[i * size_y_ + j], device_data_ + i * size_y_ + j, sizeof(T), cudaMemcpyDeviceToHost);
-                        }
-                    }
-                } else {
-                    if constexpr(multi_array_helpers::fromGPUVoidDefined<T>{}) {
-                        for(std::size_t i = 0; i < size_x_; ++i) {
-                            for(std::size_t j = 0; j < size_y_; ++j) {
-                                data_[i * size_y_ + j]->fromGPU();
-                            }
-                        }
-                    }
-                    cudaMemcpy(data_, device_data_, sizeof(T) * size_x_ * size_y_, cudaMemcpyDeviceToHost);
-                }
-            } else if(primary_location_ == MemType::UNIFIED) {
-                if constexpr(multi_array_helpers::fromGPUDefined<T>{}) {
-                    for(std::size_t i = 0; i < size_x_; ++i)
-                        for(std::size_t j = 0; j < size_y_; ++j)
-                            data_[i * size_y_ + j].fromGPU(nullptr);
-                } else if constexpr(multi_array_helpers::fromGPUVoidDefined<T>{}) {
-                    for(std::size_t i = 0; i < size_x_; ++i)
-                        for(std::size_t j = 0; j < size_y_; ++j)
-                            data_[i * size_y_ + j].fromGPU();
-                }
+            for(const auto p : {indices...}) {
+                std::size_t idx = static_cast<std::size_t>(p);
+                #if JUMP_ON_DEVICE
+                    assert(idx < size_[current_dim] && "at() operator is requesting an index greater than is possible");
+                #else
+                    if(idx >= size_[current_dim])
+                        throw std::out_of_range("index for dim " + std::to_string(current_dim) + ", " + std::to_string(idx) + " >= " + std::to_string(size_[current_dim]));
+                #endif
+                ++current_dim;
             }
-        #else
-            throw std::runtime_error("Unable to transfer to GPU when CUDA is not available.");
-        #endif
+            auto index = indices_to_index(indices...);
+            return buffer_.data<T>()[index];
+        }
     }
 
-    /**
-     * @brief transfer data from DEVICE to HOST (no effect if UNIFIED)
-     */
-    void toGPU() {
-        #if CUDA_AVAILABLE
-            if (primary_location_ == MemType::DEVICE) {
-                if(data_ == nullptr) {
-                    throw std::runtime_error("Host memory is not allocated, unable to copy to GPU");
-                }
-
-                cudaMemcpy(device_data_, data_, sizeof(T) * size_x_ * size_y_, cudaMemcpyHostToDevice);
-            } else if(primary_location_ == MemType::HOST) {
-                if(device_data_ == nullptr) {
-                    cudaMalloc(&device_data_, sizeof(T) * size_x_ * size_y_);
-                }
-                if constexpr(multi_array_helpers::toGPUDefined<T>{}) {
-                    for(std::size_t i = 0; i < size_x_; ++i) {
-                        for(std::size_t j = 0; j < size_y_; ++j) {
-                            bool copy = true;
-                            copy = data_[i * size_y_ + j]->toGPU(device_data_ + i * size_y_ + j);
-                            if(copy)
-                                cudaMemcpy(device_data_ + i * size_y_ + j, &data_[i * size_y_ + j], sizeof(T), cudaMemcpyHostToDevice);
-                        }
-                    }
-                } else {
-                    if constexpr(multi_array_helpers::toGPUVoidDefined<T>{}) {
-                        for(std::size_t i = 0; i < size_x_; ++i) {
-                            for(std::size_t j = 0; j < size_y_; ++j) {
-                                data_[i * size_y_ + j]->toGPU();
-                            }
-                        }
-                    }
-                    cudaMemcpy(device_data_, data_, sizeof(T) * size_x_ * size_y_, cudaMemcpyHostToDevice);
-                }
-            } else if(primary_location_ == MemType::UNIFIED) {
-                if constexpr(multi_array_helpers::toGPUDefined<T>{}) {
-                    for(std::size_t i = 0; i < size_x_; ++i)
-                        for(std::size_t j = 0; j < size_y_; ++j)
-                            data_[i * size_y_ + j].toGPU(nullptr);
-                } else if constexpr(multi_array_helpers::toGPUVoidDefined<T>{}) {
-                    for(std::size_t i = 0; i < size_x_; ++i)
-                        for(std::size_t j = 0; j < size_y_; ++j)
-                            data_[i * size_y_ + j].toGPU();
-                }
-            }
-        #else
-            throw std::runtime_error("Unable to transfer to GPU when CUDA is not available.");
-        #endif
+    void to_device() {
+        buffer_.to_device();
     }
 
+    void from_device() {
+        buffer_.from_device();
+    }
+
+    void sync() {
+        buffer_.sync();
+    }
+
+    const memory_buffer& buffer() const {
+        return buffer_;
+    }
 
 private:
-    void deallocate() {
-        // We only run the destructor on objects in
-        // HOST or UNIFIED memory
-        if(primary_location_ != MemType::DEVICE) {
-            for(std::size_t i = 0; i < size_x_; ++i) {
-                for(std::size_t j = 0; j < size_y_; ++j) {
-                    data_[i * size_y_ + j].~T();
-                }
-            }
+    /**
+     * @brief an internal method shared between constructors to perform basic allocation
+     * @param dimensions the dimensions to set
+     * @param location the memory locatin to allocate
+     */
+    void allocate(const std::vector<std::size_t>& dimensions, const memory_t& location) {
+        dims_ = dimensions.size();
+
+        if(dims_ > _max_dims) {
+            throw std::out_of_range("Requested dims " + std::to_string(dims_) + " is greater than the container max_dims " + std::to_string(_max_dims));
         }
 
-        if(primary_location_ == MemType::UNIFIED) {
-            #if CUDA_AVAILABLE
-                if(device_data_ != nullptr) {
-                    cudaFree(device_data_);
-                    device_data_ = nullptr;
-                    data_ = nullptr;
-                }
-            #else
-                std::fprintf(stderr, "ERROR: de-allocating unified multi_array, but CUDA is not available, ensure full project is compiled with CUDA.\n");
-            #endif
-        } else {
-            if(data_ != nullptr) {
-                free(data_);
-                data_ = nullptr;
-            }
-            if(device_data_ != nullptr) {
-                #if CUDA_AVAILABLE
-                    cudaFree(device_data_);
-                    device_data_ = nullptr;
-                #else
-                    std::fprintf(stderr, "ERROR: device_data_ != nullptr, but CUDA is not available, ensure full project is compiled with CUDA.\n");
-                #endif
-            }
+        auto total_size = 1;
+        auto idx = 0;
+        for(auto& s : dimensions) {
+            total_size *= s;
+            size_[idx] = s;
+            ++idx;
         }
+
+        buffer_.allocate<T>(total_size, location);
     }
 
-    void allocate() {
-        auto dim = size_x_ * size_y_;
-        if(dim == 0) return;
-        if(primary_location_ == MemType::HOST) {
-            data_ = static_cast<T*>(malloc(sizeof(T) * size_x_ * size_y_));
-        } else if(primary_location_ == MemType::UNIFIED) {
-            #if CUDA_AVAILABLE
-                cudaMallocManaged(&data_, sizeof(T) * size_x_ * size_y_);
-                device_data_ = data_;
-            #else
-                throw std::runtime_error("CUDA Not available, unable to allocated unified memory");
-            #endif
-        } else if(primary_location_ == MemType::DEVICE) {
-            #if CUDA_AVAILABLE
-                cudaMalloc(&device_data_, sizeof(T) * size_x_ * size_y_);
-            #else
-                throw std::runtime_error("CUDA Not available, unable to allocated unified memory");
-            #endif
-        } else {
-            throw std::runtime_error("Unknown primary location for data. This should not be happening! You should panic!");
+    /**
+     * @brief performs a conversion from indices to index in the buffer
+     * @tparam IndexT the type used for indices
+     * @param indices the indices into the array
+     * @return std::size_t the index into the buffer the indices represent
+     * @note this has no range checking - if we are performing operations
+     *  where range is already guaranteed to be safe then we can save
+     *  some computation using this instead of something like at()
+     */
+    template<typename... IndexT>
+    JUMP_INTEROPABLE
+    std::size_t indices_to_index(const IndexT&... indices) {
+        std::size_t current_dim = 0;
+        std::size_t index = 0;
+        for(const auto& p : {indices...}) {
+            std::size_t idx = static_cast<std::size_t>(p);
+            std::size_t multiplier = 1;
+            for(std::size_t i = current_dim + 1; i < dims_; ++i) {
+                multiplier *= size_[i];
+            }
+            index += idx * multiplier;
+            ++current_dim;
         }
+        return index;
     }
 
-    //! The primary location of the data, this effects how some
-    //! operations interfacing with vectors work
-    MemType primary_location_;
-    //! Array allocated on host 
-    T* data_;
-    //! Array allocated on device
-    T* device_data_;
-    //! Size of the array (x dim)
-    std::size_t size_x_;
-    //! Size of the array (y dim)
-    std::size_t size_y_;
+    /**
+     * @brief manually perform buffer dereferencing
+     *  to ensure descruction happens properly
+     */
+    void dereference_buffer() {
+        buffer_.release([&](){
+            for(std::size_t i = 0; i < size(); ++i) {
+                std::exception e;
+                auto ex = false;
+                try {
+                    buffer_.data<T>()[i].~T();
+                } catch(std::exception& er) {
+                    e = er;
+                }
+                if(ex)
+                    throw e;
+            }
+        });
+    }
+
+    //! Track the size of the array
+    std::size_t size_[_max_dims];
+    //! Track the actual number of dimensions (must be <= _max_dims)
+    std::size_t dims_;
+    //! The buffer containing all contained object data
+    memory_buffer buffer_;
 
 }; /* class multi_array */
 

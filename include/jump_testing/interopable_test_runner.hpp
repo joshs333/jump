@@ -5,18 +5,18 @@
  *  for an interopable test (GPU / CPU)
  * @date 2022-04-29
  */
-#ifndef JCONTROLS_TESTING_INTEROPABLE_TESTING_HPP_
-#define JCONTROLS_TESTING_INTEROPABLE_TESTING_HPP_
+#ifndef JUMP_TESTING_INTEROPABLE_TEST_RUNNER_HPP_
+#define JUMP_TESTING_INTEROPABLE_TEST_RUNNER_HPP_
 
-#include "jcontrols/cuda_interface.hpp"
+#include <jump/device_interface.hpp>
 #include <stdexcept>
 
-namespace jcontrols_testing {
+namespace jump_testing {
 
 //! Internal namespace of helpers for the InteropableTestRunner
 namespace interopable_test_runner_helpers {
 
-#if CUDA_AVAILABLE
+#ifdef JUMP_ENABLE_CUDA
     //! Should be called with <<<1,1>>>
     template<typename Test>
     __global__ void runTest(
@@ -44,9 +44,11 @@ struct InteropableTest {
     using TestResult = int;
     using Arguments = int;
 
-    GPU_COMPATIBLE
+    // This test would probably fail, because the results between
+    // the GPU and CPU are different
+    JUMP_INTEROPABLE
     void test(const Arguments& args, TestResult& result) {
-        #if ON_GPU
+        #if JUMP_ON_DEVICE
             result = 10;
         #else
             result = 20;
@@ -71,7 +73,7 @@ public:
     //! Get results for the test running on device, arguments passed directly to kernel
     typename Test::TestResult 
     device(const typename Test::Arguments& arguments) {
-        #if CUDA_AVAILABLE
+        #ifdef JUMP_ENABLE_CUDA
             typename Test::TestResult* device_result_ptr;
             typename Test::TestResult result;
 
@@ -91,7 +93,7 @@ public:
     //! Get results for the test running on device, arguments mem-copied to gpu and ptr passed to kernel
     typename Test::TestResult 
     device_copy(const typename Test::Arguments& arguments) {
-        #if CUDA_AVAILABLE
+        #ifdef JUMP_ENABLE_CUDA
             typename Test::TestResult* device_result_ptr;
             typename Test::Arguments* arguments_ptr;
             typename Test::TestResult result;
@@ -113,7 +115,7 @@ public:
         #endif
     }
 
-}; /* InteropableTestRunner */
+}; /* jump_testing */
 
 
 } /* namespace jcontrols_testing */

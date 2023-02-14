@@ -8,4 +8,4 @@ For example [hemi](https://github.com/harrism/hemi) has an array class that mana
 The goal of this library is to provide a more flexible run-time options, perhaps at the cost of a slightly more complicated interface (eg: priorize lambdas that can encode constepr info on whether the functor is interopable or not*). This in turn should make code more cross-platform (eg: build with cuda enabled, package for computers without CUDA that can still parallelize on CPU).
 
 TODO(jspisak): make a separate readme detailing this after I figure it out
-\* what do I mean constepr info on whether it's interopable or not? 
+\* what do I mean constepr info on whether it's interopable or not?

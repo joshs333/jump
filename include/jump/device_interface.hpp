@@ -12,14 +12,13 @@
 // possible for CUDA to be disabled at runtime if cudart is not available
 // or there are no GPU's detected
 #ifdef JUMP_ENABLE_CUDA
-    // #include <cuda.h>
-    // #include <device_functions.h>
     #include <cuda_runtime_api.h>
     #include <dlfcn.h>
 #endif
 
+// STD Includes
 #include <type_traits>
-
+#include <string>
 
 // If cuda is enabled and we are compiling with a device compatible 
 #if defined(JUMP_ENABLE_CUDA) && defined(__CUDACC__)
@@ -68,16 +67,16 @@ constexpr bool cuda_enabled() {
  * @return true or false if the number of devices are non-zero
  */
 inline bool devices_available() {
-    if constexpr(cuda_enabled()) {
+    #ifdef JUMP_ENABLE_CUDA
         auto r = cudaGetDeviceCount(&_device_count);
         if(r != 0)
             return _cuda_available;
         if(_device_count > 0)
             _cuda_available = true;
         return _cuda_available;
-    } else {
+    #else
         return false;
-    }
+    #endif
 
     // We don't need to do this because of static linkage - but if we wanted
     // we could do runtime library loading / checking
@@ -131,14 +130,14 @@ inline int device_count() {
     #endif
 } /* cuda_device_count() */
 
-// /**
-//  * @brief allow a constexpr if instead of a macro call to determine
-//  *  if code is being executed on device
-//  * @return true if running on device, false if running on host
-//  * @note the below works for cuda 11.7 at least... doesn't work for
-//  *   11.4 and below... so I'll not use it so I can target cuda 11.3
-//  *   and introduce it later on
-//  **/
+/**
+ * @brief allow a constexpr if instead of a macro call to determine
+ *  if code is being executed on device
+ * @return true if running on device, false if running on host
+ * @note the below works for cuda 11.7 at least... doesn't work for
+ *   11.4 and below... so I'll not use it so I can target cuda 11.3
+ *   and introduce it later on
+ **/
 // constexpr bool on_device() {
 //     #if JUMP_ON_DEVICE
 //         return true;
@@ -292,6 +291,89 @@ struct class_interface {
         return _device_interface_helpers::from_device_defined_test<T>::value;
     }
 }; /* struct class_interface */
+
+
+// if cuda is not enabled, we need to define some types
+// to allow the cuda_error_exception to compile (even though
+// it shouldn't really be used if !JUMP_ENABLE_CUDA)
+//
+// I'm not sure this is the best way to handle this, but I'm
+// going to roll with this for now.
+// @TODO(jspisak): revisit this
+#ifndef JUMP_ENABLE_CUDA
+    using cudaError_t = unsigned int;
+    
+    const char* cudaGetErrorName(const cudaError_t&) {
+        return "NOT COMPILED WITH CUDA";
+    }
+
+    const char* cudaGetErrorString(const cudaError_t&) {
+        return "NOT COMPILED WITH CUDA";
+    }
+#endif
+
+/**
+ * @brief allows easier throwing of exceptions from the errors
+ *  that Cuda functions return
+ */
+class cuda_error_exception : public std::exception {
+public:
+    cuda_error_exception(
+        const cudaError_t& cuda_error,
+        const std::string& msg = ""
+    ):
+            cuda_error_(cuda_error)
+    {
+        message_ = std::string(cudaGetErrorName(cuda_error_)) + " "
+                   + cudaGetErrorString(cuda_error_);
+        if(msg != "")
+            message_ += ": " + msg;
+    }
+
+    const char* what() const noexcept {
+        return message_.c_str();
+    }
+    
+    cudaError_t cuda_error_;
+    std::string message_;
+
+}; /* class cuda_error_exception */
+
+/**
+ * @brief error to express that cuda is not available
+ *  (usually used when if constexpr(jump::cuda_available()) evaluates to false)
+ */
+class no_cuda_exception : public std::exception {
+public:
+    no_cuda_exception(const std::string& msg = ""):
+        message_("CUDA is not available: " + msg)
+    {}
+
+    const char* what() const noexcept {
+        return message_.c_str();
+    }
+
+    std::string message_;
+
+}; /* class no_cuda_exception */
+
+/**
+ * @brief error to express that there are no devices to run on
+ *  (usually used when jump::devices_available() evaluates to false)
+ */
+class no_devices_exception : public std::exception {
+public:
+    no_devices_exception(const std::string& msg = ""):
+        message_("No devices available: " + msg)
+    {}
+
+    const char* what() const noexcept {
+        return message_.c_str();
+    }
+
+    std::string message_;
+
+}; /* class no_devices_exception */
 
 } /* namespace jump */
 

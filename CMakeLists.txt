@@ -84,7 +84,8 @@ endfunction()
 
 # Mark an executable as a test (link gtest / deps & call gtest_discover_tests on it)
 function(jump_test target_name)
-    target_link_libraries(${target_name} gtest gtest_main pthread)
+    message(STATUS "[JUMP][${target_name}] adding test")
+    target_link_libraries(${target_name} gtest gtest_main pthread jump)
     gtest_discover_tests(${target_name})
 endfunction()
 
@@ -96,7 +97,13 @@ endfunction()
 
 if(${JUMP_BUILD_EXAMPLES})
     message(STATUS "[JUMP] Building Examples")
-    jump_cuda_executable(jump_memory_buffer_example src/examples/memory_buffer.cpp)
+
+    if(${JUMP_ENABLE_CUDA})
+        jump_cuda_executable(jump_memory_buffer_example src/examples/memory_buffer.cpp)
+        jump_cuda_executable(jump_array_example src/examples/array.cpp)
+        jump_cuda_executable(jump_multi_array_example src/examples/multi_array.cpp)
+        jump_cuda_executable(jump_parallel_example src/examples/parallel.cpp)
+    endif()
 endif()
 
 #####################################################################
@@ -104,8 +111,28 @@ endif()
 #####################################################################
 if(${JUMP_BUILD_TESTS})
     message(STATUS "[JUMP] Building Tests")
-    jump_cuda_executable(jump_memory_buffer_test src/tests/memory_buffer.cpp)
-    jump_test(jump_memory_buffer_test)
+    if(${JUMP_ENABLE_CUDA})
+        jump_cuda_executable(jump_memory_buffer_test src/tests/memory_buffer.cpp)
+        jump_test(jump_memory_buffer_test)
+
+        jump_cuda_executable(jump_array_test src/tests/array.cpp)
+        jump_test(jump_array_test)
+
+        jump_cuda_executable(jump_shared_ptr_test src/tests/shared_ptr.cpp)
+        jump_test(jump_shared_ptr_test)
+
+        jump_cuda_executable(jump_multi_array_test src/tests/multi_array.cpp)
+        jump_test(jump_multi_array_test)
+    endif()
+
+    add_executable(jump_memory_buffer_test_no_cuda src/tests/memory_buffer.cpp)
+    jump_test(jump_memory_buffer_test_no_cuda)
+
+    add_executable(jump_array_test_no_cuda src/tests/array.cpp)
+    jump_test(jump_array_test_no_cuda)
+
+    add_executable(jump_shared_ptr_test_no_cuda src/tests/shared_ptr.cpp)
+    jump_test(jump_shared_ptr_test_no_cuda)
 endif()
 
 #####################################################################
@@ -113,9 +140,9 @@ endif()
 #####################################################################
 install(TARGETS ${PROJECT_NAME}
     EXPORT ${PROJECT_NAME}_Targets
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}/jump
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}/jump
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}/jump
 )
 
 write_basic_package_version_file(
