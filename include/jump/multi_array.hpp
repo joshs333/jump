@@ -28,9 +28,180 @@ constexpr bool can_be_size_t() {
 
 } /* namespace multi_array_helpers */
 
+/**
+ * @brief container class that is able to hold multi-dimensional
+ *  arrays that are fixed after creation of the array
+ * @tparam T the type of object that is being held
+ * @tparam _max_dims the maximum number of dimensions for this container
+ */
 template<typename T, std::size_t _max_dims = 4>
 class multi_array {
 public:
+    struct axes {
+        axes() {
+            for(std::size_t i = 0; i < _max_dims; ++i) {
+                axes_[i] = true;
+            }
+        }
+
+        /**
+         * @brief construct axes with specific axes values
+         * @tparam IndexT the type used for an specific dimension
+         * @param val force there to be at least one std::size_t value to use this constructor
+         * @param vals index values
+         * @note makes sure that the number of arguments is not greater than _max_dims
+         */
+        template<typename... DimT>
+        JUMP_INTEROPABLE
+        axes(const std::size_t& dim, const DimT&... dims) {
+            static_assert(multi_array_helpers::can_be_size_t<DimT...>(), "all DimT must be castable to std::size_t");
+            static_assert(sizeof...(DimT) + 1 <= _max_dims, "Number of indexes must be less than _max_dims");
+            // wrapping the rest in this constexpr cleans up the error output if the static_assert fails :)
+            if constexpr(multi_array_helpers::can_be_size_t<DimT...>()) {
+                for(std::size_t i = 0; i < _max_dims; ++i) {
+                    axes_[i] = false;
+                }
+                #if JUMP_ON_DEVICE
+                    assert(dim < _max_dims && "dim must be less than _max_dims");
+                #else
+                    if(dim >= _max_dims)
+                        throw std::out_of_range("dim " + std::to_string(dim) + " >= _max_dims " + std::to_string(_max_dims));
+                #endif
+                axes_[dim] = true;
+                std::size_t dim = 1;
+                for(const auto p : {dims...}) {
+                    auto current_dim = static_cast<std::size_t>(p);
+                    #if JUMP_ON_DEVICE
+                        assert(current_dim < _max_dims && "dim must be less than _max_dims");
+                    #else
+                        if(current_dim >= _max_dims)
+                            throw std::out_of_range("dim " + std::to_string(current_dim) + " >= _max_dims " + std::to_string(_max_dims));
+                    #endif
+                    axes_[current_dim] = true;
+                }
+            }
+        }
+
+        /**
+         * @brief index into the dimensions and get the axis value
+         * @param dim the dimension to get the axis selection for
+         * @return bool by reference
+         */
+        JUMP_INTEROPABLE
+        bool& operator[](const std::size_t& dim) {
+            #if JUMP_ON_DEVICE
+                assert(dim < _max_dims && "dim must be less than _max_dims");
+            #else
+                if(dim >= _max_dims)
+                    throw std::out_of_range("dim " + std::to_string(dim) + " must be less than _max_dims " + std::to_string(_max_dims));
+            #endif
+            return axes_[dim];
+        }
+
+        /**
+         * @brief index into the dimensions and get the axis value
+         * @param dim the dimension to get the axis selection for
+         * @return bool by const-reference
+         */
+        JUMP_INTEROPABLE
+        const bool& operator[](const std::size_t& dim) const {
+            #if JUMP_ON_DEVICE
+                assert(dim < _max_dims && "dim must be less than _max_dims");
+            #else
+                if(dim >= _max_dims)
+                    throw std::out_of_range("dim " + std::to_string(dim) + " must be less than _max_dims " + std::to_string(_max_dims));
+            #endif
+            return axes_[dim];
+        }
+
+        bool axes_[_max_dims];
+    };
+
+    /**
+     * @brief a class that can represent multi-dimensional indices
+     * @note currently the indices have no concept of the actual number
+     *  of dimensions that are used.
+     */
+    struct indices {
+        /**
+         * @brief default constructor for indices - 0 out each index
+         */
+        JUMP_INTEROPABLE
+        indices() {
+            for(std::size_t i = 0; i < _max_dims; ++i)
+                indices_[i] = 0.0;
+        }
+
+        /**
+         * @brief construct indices with values
+         * @tparam IndexT the type used for an index value
+         * @param val force there to be at least one std::size_t value to use this constructor
+         * @param vals index values
+         * @note makes sure that the number of arguments is not greater than _max_dims
+         */
+        template<typename... IndexT>
+        JUMP_INTEROPABLE
+        indices(const std::size_t& val, const IndexT&... vals) {
+            static_assert(multi_array_helpers::can_be_size_t<IndexT...>(), "all IndexT must be castable to std::size_t");
+            static_assert(sizeof...(IndexT) + 1 <= _max_dims, "Number of indexes must be less than _max_dims");
+            // wrapping the rest in this constexpr cleans up the error output if the static_assert fails :)
+            if constexpr(multi_array_helpers::can_be_size_t<IndexT...>()) {
+                indices_[0] = val;
+                std::size_t dim = 1;
+                for(const auto p : {vals...}) {
+                    indices_[dim++] = static_cast<std::size_t>(p);
+                }
+                for(std::size_t i = dim; i < _max_dims; ++i)
+                    indices_[i] = 0;
+            }
+        }
+
+        /**
+         * @brief construct indices from an array of size values
+         * @param sizes the size values to construct from
+         */
+        JUMP_INTEROPABLE
+        indices(const std::size_t* sizes) {
+            for(std::size_t i = 0; i < _max_dims; ++i)
+                indices_[i] = sizes[i];
+        }
+
+        /**
+         * @brief index into the dimensions and get the index there
+         * @param dim the dimension to get the index for
+         * @return index value by reference
+         */
+        JUMP_INTEROPABLE
+        std::size_t& operator[](const std::size_t& dim) {
+            #if JUMP_ON_DEVICE
+                assert(dim < _max_dims && "dim must be less than _max_dims");
+            #else
+                if(dim >= _max_dims)
+                    throw std::out_of_range("dim " + std::to_string(dim) + " must be less than _max_dims " + std::to_string(_max_dims));
+            #endif
+            return indices_[dim];
+        }
+    
+        /**
+         * @brief index into the dimensions and get the index there
+         * @param dim the dimension to get the index for
+         * @return index value by const reference
+         */
+        JUMP_INTEROPABLE
+        const std::size_t& operator[](const std::size_t& dim) const {
+            #if JUMP_ON_DEVICE
+                assert(dim < _max_dims && "dim must be less than _max_dims");
+            #else
+                if(dim >= _max_dims)
+                    throw std::out_of_range("dim " + std::to_string(dim) + " must be less than _max_dims " + std::to_string(_max_dims));
+            #endif
+            return indices_[dim];
+        }
+
+        //! Stores the index values
+        std::size_t indices_[_max_dims];
+    };
+
     /**
      * @brief construct a new multi_array with the default initializer 
      *  for contained objects
@@ -43,10 +214,10 @@ public:
     ) {
         allocate(dimensions, location);
 
-
         for(auto i = 0; i < size(); ++i)
             new(&buffer_.data<T>()[i]) T();
     }
+
     /**
      * @brief construct a new multi_array initializing members from a
      *  default value as specified
@@ -125,14 +296,22 @@ public:
     ~multi_array() {
         dereference_buffer();
     }
-    
+
     /**
      * @brief gets the number of dimensions of this multi_array
      * @return std::size_t the number of dimensions 
      */
     JUMP_INTEROPABLE
-    std::size_t dims() {
+    std::size_t dims() const {
         return dims_;
+    }
+
+    /**
+     * @brief access the shape with an indices representation
+     * @return indices containg the sizes of all dimensions
+     */
+    indices shape() {
+        return indices(size_);
     }
 
     /**
@@ -168,16 +347,15 @@ public:
     /**
      * @brief access an element
      * @tparam IndexT the type used to express index
-     * @param indices some series of indices to identify which element to access
+     * @param vals index values
      * @return the element in the multi_array at indices by reference
      */
     template<typename... IndexT>
     JUMP_INTEROPABLE
-    T& at(const IndexT&... indices) {
+    T& at(const IndexT&... vals) const {
         static_assert(multi_array_helpers::can_be_size_t<IndexT...>(), "all IndexT must be castable to std::size_t");
         // wrapping the rest in this constexpr cleans up the error output if the static_assert fails :)
         if constexpr(multi_array_helpers::can_be_size_t<IndexT...>()) {
-            std::size_t current_dim = 0;
             const std::size_t n = sizeof...(IndexT);
             #if JUMP_ON_DEVICE
                 assert(n <= dims_ && "at() operator is requesting a dimension greater than is possible");
@@ -186,33 +364,55 @@ public:
                     throw std::out_of_range("requested dimensions " + std::to_string(n) + " >= dims " + std::to_string(dims_));
             #endif
 
-            for(const auto p : {indices...}) {
-                std::size_t idx = static_cast<std::size_t>(p);
-                #if JUMP_ON_DEVICE
-                    assert(idx < size_[current_dim] && "at() operator is requesting an index greater than is possible");
-                #else
-                    if(idx >= size_[current_dim])
-                        throw std::out_of_range("index for dim " + std::to_string(current_dim) + ", " + std::to_string(idx) + " >= " + std::to_string(size_[current_dim]));
-                #endif
-                ++current_dim;
-            }
-            auto index = indices_to_index(indices...);
-            return buffer_.data<T>()[index];
+            return at(indices(vals...));
         }
     }
 
+    /**
+     * @brief access an element
+     * @param vals the index values
+     * @return the element in the multi_array at the indices (by reference)
+     */
+    JUMP_INTEROPABLE
+    T& at(const indices& vals) const {
+        for(std::size_t current_dim = 0; current_dim < dims_; ++current_dim) {
+            #if JUMP_ON_DEVICE
+                assert(vals[current_dim] < size_[current_dim] && "at() operator is requesting an index greater than is possible");
+            #else
+                if(vals[current_dim] >= size_[current_dim])
+                    throw std::out_of_range("index for dim " + std::to_string(current_dim) + ", " + std::to_string(vals[current_dim]) + " >= " + std::to_string(size_[current_dim]));
+            #endif
+        }
+
+        auto index = indices_to_index(vals);
+        return buffer_.data<T>()[index];
+    }
+
+    /**
+     * @brief transfer all data to device
+     */
     void to_device() {
         buffer_.to_device();
     }
 
+    /**
+     * @brief transfer all data from device to the host
+     */
     void from_device() {
         buffer_.from_device();
     }
 
+    /**
+     * @brief sync device pointers before usage on device
+     */
     void sync() {
         buffer_.sync();
     }
 
+    /**
+     * @brief directly access the memory buffer containing all the underlying data
+     * @return the memory buffer by const reference
+     */
     const memory_buffer& buffer() const {
         return buffer_;
     }
@@ -243,26 +443,21 @@ private:
 
     /**
      * @brief performs a conversion from indices to index in the buffer
-     * @tparam IndexT the type used for indices
-     * @param indices the indices into the array
+     * @param index_vals the indices into the array
      * @return std::size_t the index into the buffer the indices represent
      * @note this has no range checking - if we are performing operations
      *  where range is already guaranteed to be safe then we can save
      *  some computation using this instead of something like at()
      */
-    template<typename... IndexT>
     JUMP_INTEROPABLE
-    std::size_t indices_to_index(const IndexT&... indices) {
-        std::size_t current_dim = 0;
+    std::size_t indices_to_index(const indices& index_vals) const {
         std::size_t index = 0;
-        for(const auto& p : {indices...}) {
-            std::size_t idx = static_cast<std::size_t>(p);
+        for(std::size_t current_dim = 0; current_dim < dims(); ++current_dim) {
             std::size_t multiplier = 1;
             for(std::size_t i = current_dim + 1; i < dims_; ++i) {
                 multiplier *= size_[i];
             }
-            index += idx * multiplier;
-            ++current_dim;
+            index += index_vals[current_dim] * multiplier;
         }
         return index;
     }

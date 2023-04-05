@@ -34,6 +34,8 @@ else()
     project(jump VERSION ${JUMP_VERSION} LANGUAGES CXX)
 endif()
 
+find_package(Eigen3 REQUIRED)
+
 
 include(CheckLanguage)
 check_language(CUDA)
@@ -51,6 +53,7 @@ target_include_directories(${PROJECT_NAME} INTERFACE
     $<BUILD_INTERFACE:${${PROJECT_NAME}_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/${PROJECT_NAME}>
 )
+target_link_libraries(${PROJECT_NAME} INTERFACE Eigen3::Eigen)
 
 # Goal of these functions is to setup a target with libaries and definitions to
 # enable a particular backend, and no other links or includes
@@ -63,7 +66,7 @@ function(jump_cuda_target target_name)
 
     set_property(TARGET ${target_name} PROPERTY CUDA_SEPARABLE_COMPILATION ON)
     target_compile_definitions(${target_name} PUBLIC JUMP_ENABLE_CUDA)
-    target_link_libraries(${target_name} jump ${CUDA_LIBRARIES})
+    target_link_libraries(${target_name} PUBLIC jump ${CUDA_LIBRARIES})
     target_include_directories(${target_name} PRIVATE ${CUDA_INCLUDE_DIRS})
 
     set(NVCC_ARGS ${NVCC_ARGS} --expt-relaxed-constexpr -Xcudafe "--diag_suppress=20012 --display_error_number")
@@ -85,7 +88,7 @@ endfunction()
 # Mark an executable as a test (link gtest / deps & call gtest_discover_tests on it)
 function(jump_test target_name)
     message(STATUS "[JUMP][${target_name}] adding test")
-    target_link_libraries(${target_name} gtest gtest_main pthread jump)
+    target_link_libraries(${target_name} PUBLIC gtest gtest_main pthread jump)
     gtest_discover_tests(${target_name})
 endfunction()
 
@@ -103,6 +106,7 @@ if(${JUMP_BUILD_EXAMPLES})
         jump_cuda_executable(jump_array_example src/examples/array.cpp)
         jump_cuda_executable(jump_multi_array_example src/examples/multi_array.cpp)
         jump_cuda_executable(jump_parallel_example src/examples/parallel.cpp)
+        jump_cuda_executable(jump_octree_example src/examples/octree.cpp)
     endif()
 endif()
 

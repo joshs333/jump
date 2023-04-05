@@ -52,6 +52,36 @@ struct FunctionCalling {
 };
 
 
+struct BaseStruct {
+    JUMP_INTEROPABLE
+    virtual int f() = 0;
+};
+
+struct DerivedA {
+// struct DerivedA : BaseStruct {
+    JUMP_INTEROPABLE
+    int f() {
+        return 0;
+    }
+};
+
+struct DerivedB : BaseStruct {
+    JUMP_INTEROPABLE
+    int f() {
+        return 1;
+    }
+};
+
+struct DerivedFunctionCalling {
+    using Arguments  = jump::shared_ptr<DerivedA>;
+    using TestResult = int;
+
+    JUMP_INTEROPABLE
+    static void test(const Arguments& args, TestResult& result) {
+        result = args->f();
+    }
+};
+
 } /* shared_ptr_testing */
 
 TEST(TEST_SUITE_NAME, makeSharedOnHost) {
@@ -193,6 +223,39 @@ TEST(TEST_SUITE_NAME, functionTestingUnified) {
     if constexpr(!jump::cuda_enabled())
         ASSERT_TRUE(exception);
 }
+
+/// THIS WILL NEVER WORK HOW I WANT IT TO!
+/// VIRTUAL CLASSES CANNOT CROSS THE HOST->DEVICE BARRIER :( BIG SAD!
+// TEST(TEST_SUITE_NAME, DerivedFunctionCalling) {
+//     using Test = shared_ptr_testing::DerivedFunctionCalling;
+//     using TestRunner = jump_testing::InteropableTestRunner<Test>;
+//     TestRunner runner;
+
+//     auto ptr = jump::make_shared_on_host<shared_ptr_testing::DerivedA>();
+//     ptr.to_device();
+//     ptr.sync();
+//     // auto ptr2 = jump::make_shared_on_host<shared_ptr_testing::DerivedB>();
+//     ASSERT_EQ(runner.host(ptr), 0);
+//     // ASSERT_EQ(runner.host(ptr2), 1);
+
+//     std::printf("%lu %lu\n", sizeof(shared_ptr_testing::DerivedA), sizeof(shared_ptr_testing::BaseStruct));
+
+//     bool exception = false;
+//     try {
+//         ptr.to_device();
+//         ASSERT_EQ(runner.device(ptr), 0);
+//         // ASSERT_EQ(runner.device_copy(ptr), 0);
+//         // ASSERT_EQ(runner.device(ptr2), 1);
+//         // ASSERT_EQ(runner.device_copy(ptr2), 1);
+//     } catch(std::exception& e) {
+//         if constexpr(jump::cuda_enabled())
+//             throw e;
+//         exception = true;
+//     }
+
+//     if constexpr(!jump::cuda_enabled())
+//         ASSERT_TRUE(exception);
+// }
 
 int main(int argc, char **argv) {
     testing::InitGoogleTest(&argc, argv);

@@ -1,3 +1,9 @@
+/**
+ * @file array.hpp
+ * @author Joshua Spisak (jspisak@andrew.cmu.edu)
+ * @brief adds an array type that can be used interopably
+ * @date 2023-03-17
+ */
 #ifndef JUMP_ARRAY_HPP_
 #define JUMP_ARRAY_HPP_
 
@@ -218,7 +224,7 @@ public:
      * @return the array member by const reference
      */
     JUMP_INTEROPABLE
-    const T& at(const std::size_t& index) const {
+    T& at(const std::size_t& index) const {
         #if JUMP_ON_DEVICE
             assert(index < size() && "jump::array index must be less than size");
         #else
@@ -246,7 +252,7 @@ public:
      * @return T& value by const reference at(index);
      */
     JUMP_INTEROPABLE
-    const T& operator[](const std::size_t& index) const {
+    T& operator[](const std::size_t& index) const {
         return at(index);
     }
 
@@ -289,6 +295,15 @@ public:
     memory_buffer& buffer() {
         return buffer_;
     }
+
+    /**
+     * @brief provide direct access to the underlying memory buffer
+     * @return const memory_buffer& the memory buffer containing array data
+     */
+    const memory_buffer& buffer() const {
+        return buffer_;
+    }
+
 private:
     /**
      * @brief internal method to isolate where the allocation is done

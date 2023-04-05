@@ -44,6 +44,20 @@ public:
     {}
 
     /**
+     * @brief copy-construct a shared_ptr from a derived type to a base type
+     * @tparam Y the derived type, where T is the base type
+     * @param ptr the shared_ptr to copy from
+     * @note following this operation the new shared_ptr and ptr
+     *   will share ownership of the same shared object
+     */
+    template<typename Y>
+    shared_ptr(const shared_ptr<Y>& ptr):
+        buffer_(ptr.buffer())
+    {
+        static_assert(std::is_base_of<T, Y>::value, "T must be base of Y");
+    }
+
+    /**
      * @brief move-construct a shared_ptr
      * @param ptr the shared_ptr to transfer ownership from
      */
@@ -139,7 +153,7 @@ public:
      * @brief provide direct access to the underlying memory buffer
      * @return memory_buffer& the memory buffer containing array data
      */
-    memory_buffer& buffer() {
+    const memory_buffer& buffer() const {
         return buffer_;
     }
 private:
