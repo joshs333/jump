@@ -38,9 +38,21 @@ template<typename T, std::size_t _max_dims = 4>
 class multi_array {
 public:
     struct axes {
+        JUMP_INTEROPABLE
         axes() {
             for(std::size_t i = 0; i < _max_dims; ++i) {
                 axes_[i] = true;
+            }
+        }
+
+        JUMP_INTEROPABLE
+        axes(const std::initializer_list<int>& axes_to_mark) {
+            for(std::size_t i = 0; i < _max_dims; ++i) {
+                axes_[i] = false;
+            }
+            for(const auto& axe_to_mark : axes_to_mark) {
+                if(axe_to_mark >= _max_dims) continue;
+                axes_[axe_to_mark] = true;
             }
         }
 
@@ -129,7 +141,8 @@ public:
         JUMP_INTEROPABLE
         indices() {
             for(std::size_t i = 0; i < _max_dims; ++i)
-                indices_[i] = 0.0;
+                indices_[i] = 0;
+            dim_count_ = _max_dims;
         }
 
         /**
@@ -161,8 +174,8 @@ public:
          * @param sizes the size values to construct from
          */
         JUMP_INTEROPABLE
-        indices(const std::size_t* sizes) {
-            for(std::size_t i = 0; i < _max_dims; ++i)
+        indices(const std::size_t* sizes, const std::size_t& dim_count = _max_dims) {
+            for(std::size_t i = 0; i < dim_count; ++i)
                 indices_[i] = sizes[i];
         }
 
@@ -174,10 +187,10 @@ public:
         JUMP_INTEROPABLE
         std::size_t& operator[](const std::size_t& dim) {
             #if JUMP_ON_DEVICE
-                assert(dim < _max_dims && "dim must be less than _max_dims");
+                assert(dim < dim_count_ && "dim must be less than dim_count_");
             #else
-                if(dim >= _max_dims)
-                    throw std::out_of_range("dim " + std::to_string(dim) + " must be less than _max_dims " + std::to_string(_max_dims));
+                if(dim >= dim_count_)
+                    throw std::out_of_range("dim " + std::to_string(dim) + " must be less than dim_count_ " + std::to_string(dim_count_));
             #endif
             return indices_[dim];
         }
@@ -190,17 +203,30 @@ public:
         JUMP_INTEROPABLE
         const std::size_t& operator[](const std::size_t& dim) const {
             #if JUMP_ON_DEVICE
-                assert(dim < _max_dims && "dim must be less than _max_dims");
+                assert(dim < dim_count_ && "dim must be less than dim_count_");
             #else
-                if(dim >= _max_dims)
-                    throw std::out_of_range("dim " + std::to_string(dim) + " must be less than _max_dims " + std::to_string(_max_dims));
+                if(dim >= dim_count_)
+                    throw std::out_of_range("dim " + std::to_string(dim) + " must be less than dim_count_ " + std::to_string(dim_count_));
             #endif
             return indices_[dim];
         }
 
+        JUMP_INTEROPABLE
+        const std::size_t& dims() const {
+            return dim_count_;
+        }
+
+        JUMP_INTEROPABLE
+        std::size_t& dims() {
+            return dim_count_;
+        }
+
         //! Stores the index values
         std::size_t indices_[_max_dims];
-    };
+        //! Stores the number of dimensions
+        std::size_t dim_count_;
+
+    }; /* struct indices */
 
     /**
      * @brief construct a new multi_array with the default initializer 
@@ -244,11 +270,8 @@ public:
      */
     multi_array(const multi_array& arr):
         buffer_(arr.buffer_),
-        dims_(arr.dims_)
-    {
-        for(int i = 0; i < dims_; ++i)
-            size_[i] = arr.size_[i];
-    }
+        size_(arr.size_)
+    {}
 
     /**
      * @brief move-construct a new multi_array
@@ -256,11 +279,8 @@ public:
      */
     multi_array(multi_array&& arr):
         buffer_(std::move(arr.buffer_)),
-        dims_(arr.dims_)
-    {
-        for(int i = 0; i < dims_; ++i)
-            size_[i] = arr.size_[i];
-    }
+        size_(arr.size_)
+    {}
 
     /**
      * @brief copy-assignment to this multi_array
@@ -270,9 +290,7 @@ public:
     multi_array& operator=(const multi_array& arr) {
         dereference_buffer();
         buffer_ = arr.buffer_;
-        dims_ = arr.dims_;
-        for(int i = 0; i < dims_; ++i)
-            size_[i] = arr.size_[i];
+        size_ = arr.size_;
         return *this;
     }
 
@@ -284,9 +302,7 @@ public:
     multi_array& operator=(multi_array&& arr) {
         dereference_buffer();
         buffer_ = std::move(arr.buffer_);
-        dims_ = arr.dims_;
-        for(int i = 0; i < dims_; ++i)
-            size_[i] = arr.size_[i];
+        size_ = arr.size_;
         return *this;
     }
 
@@ -303,7 +319,7 @@ public:
      */
     JUMP_INTEROPABLE
     std::size_t dims() const {
-        return dims_;
+        return size_.dims();
     }
 
     /**
@@ -311,7 +327,7 @@ public:
      * @return indices containg the sizes of all dimensions
      */
     indices shape() {
-        return indices(size_);
+        return size_;
     }
 
     /**
@@ -323,10 +339,10 @@ public:
     JUMP_INTEROPABLE
     std::size_t shape(const std::size_t& dim) {
         #if JUMP_ON_DEVICE
-            assert(dim < dims_);
+            assert(dim < size_.dims());
         #else
-            if (dim >= dims_)
-                throw std::out_of_range("dim " + std::to_string(dim) + " >= dims " + std::to_string(dims_));
+            if (dim >= size_.dims())
+                throw std::out_of_range("dim " + std::to_string(dim) + " >= dims " + std::to_string(size_.dims()));
         #endif
         return size_[dim];
     }
@@ -338,7 +354,7 @@ public:
     JUMP_INTEROPABLE
     std::size_t size() {
         std::size_t result = 1;
-        for(std::size_t i = 0; i < dims_; ++i) {
+        for(std::size_t i = 0; i < size_.dims(); ++i) {
             result *= size_[i];
         }
         return result;
@@ -358,10 +374,10 @@ public:
         if constexpr(multi_array_helpers::can_be_size_t<IndexT...>()) {
             const std::size_t n = sizeof...(IndexT);
             #if JUMP_ON_DEVICE
-                assert(n <= dims_ && "at() operator is requesting a dimension greater than is possible");
+                assert(n <= size_.dims() && "at() operator is requesting a dimension greater than is possible");
             #else
-                if(n > dims_)
-                    throw std::out_of_range("requested dimensions " + std::to_string(n) + " >= dims " + std::to_string(dims_));
+                if(n > size_.dims())
+                    throw std::out_of_range("requested dimensions " + std::to_string(n) + " >= dims " + std::to_string(size_.dims()));
             #endif
 
             return at(indices(vals...));
@@ -375,7 +391,7 @@ public:
      */
     JUMP_INTEROPABLE
     T& at(const indices& vals) const {
-        for(std::size_t current_dim = 0; current_dim < dims_; ++current_dim) {
+        for(std::size_t current_dim = 0; current_dim < size_.dims(); ++current_dim) {
             #if JUMP_ON_DEVICE
                 assert(vals[current_dim] < size_[current_dim] && "at() operator is requesting an index greater than is possible");
             #else
@@ -424,11 +440,10 @@ private:
      * @param location the memory locatin to allocate
      */
     void allocate(const std::vector<std::size_t>& dimensions, const memory_t& location) {
-        dims_ = dimensions.size();
-
-        if(dims_ > _max_dims) {
-            throw std::out_of_range("Requested dims " + std::to_string(dims_) + " is greater than the container max_dims " + std::to_string(_max_dims));
+        if(dimensions.size() > _max_dims) {
+            throw std::out_of_range("Requested dims " + std::to_string(dimensions.size()) + " is greater than the container max_dims " + std::to_string(_max_dims));
         }
+        size_.dims() = dimensions.size();
 
         auto total_size = 1;
         auto idx = 0;
@@ -454,7 +469,7 @@ private:
         std::size_t index = 0;
         for(std::size_t current_dim = 0; current_dim < dims(); ++current_dim) {
             std::size_t multiplier = 1;
-            for(std::size_t i = current_dim + 1; i < dims_; ++i) {
+            for(std::size_t i = current_dim + 1; i < dims(); ++i) {
                 multiplier *= size_[i];
             }
             index += index_vals[current_dim] * multiplier;
@@ -483,9 +498,10 @@ private:
     }
 
     //! Track the size of the array
-    std::size_t size_[_max_dims];
-    //! Track the actual number of dimensions (must be <= _max_dims)
-    std::size_t dims_;
+    indices size_;
+    // std::size_t size_[_max_dims];
+    // //! Track the actual number of dimensions (must be <= _max_dims)
+    // std::size_t dims_;
     //! The buffer containing all contained object data
     memory_buffer buffer_;
 

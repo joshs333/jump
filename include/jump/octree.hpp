@@ -26,8 +26,8 @@ class OctreeSphere {
     double radius;
 };
 
-template<typename InsertionT>
-using octree_is_spatial_type = (std::is_same<InsertionT, OctreeCube> || std::is_same<InsertionT, OctreeSphere>);
+// template<typename InsertionT>
+// using octree_is_spatial_type = (std::is_same<InsertionT, OctreeCube> || std::is_same<InsertionT, OctreeSphere>);
 
 template<typename ContainedT>
 class OctreeLeaf {
@@ -42,7 +42,7 @@ class OctreeNode {
 template<typename ContainedT = int, typename InsertionT = Eigen::Matrix<double, 3, 1>>
 class Octree {
 
-    void insert(const const ContainedT& container) {
+    void insert(const InsertionT& i, const ContainedT& container) {
 
     }
 
