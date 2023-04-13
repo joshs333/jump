@@ -3,7 +3,6 @@
 
 namespace jump {
 
-
 } /* namespace jump */
 
 #endif /* JUMP_PARALLEL_HPP_ */

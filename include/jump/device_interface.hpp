@@ -171,6 +171,30 @@ inline void device_thread_sync() {
 //! A few functions to help perform constexpr evaluation of types
 //! to determine compatibility / interfacing
 namespace _device_interface_helpers {
+    // This overload is selected if T.kernel(std::size_t) exists
+    template <typename T>
+    constexpr auto args_index_overload(int) -> decltype( std::declval<T>().kernel(static_cast<std::size_t>(0)), std::true_type{} );
+
+    // This overload is selected if T.kernel(std::size_t) fails
+    template <typename>
+    constexpr auto args_index_overload(long) -> std::false_type;
+
+    // This tests if T.kernel(std::size_t) is defined
+    template <typename T>
+    using args_index_test = decltype( args_index_overload<T>(0) );
+
+    // This overload is selected if T.kernel(std::size_t, std::size_t) exists
+    template <typename T>
+    constexpr auto args_index_index_overload(int) -> decltype( std::declval<T>().kernel(static_cast<std::size_t>(0), static_cast<std::size_t>(0)), std::true_type{} );
+
+    // This overload is selected if T.kernel(std::size_t, std::size_t) fails
+    template <typename>
+    constexpr auto args_index_index_overload(long) -> std::false_type;
+
+    // This tests if T.kernel(std::size_t, std::size_t) is defined
+    template <typename T>
+    using args_index_index_test = decltype( args_index_index_overload<T>(0) );
+
     // This overload of to_device_defined_overload is selected if T.to_device() exists
     template <typename T>
     constexpr auto to_device_defined_overload(int) -> decltype( std::declval<T>().to_device(), std::true_type{} );
@@ -218,6 +242,7 @@ namespace _device_interface_helpers {
     // This evaluates if T::device_compatible is defined using the overloads above
     template <typename T>
     using device_compatible_defined_test = decltype( device_compatible_defined_overload<T>(0) );
+
 } /* namespace _device_interface_helpers */
 
 
@@ -228,6 +253,23 @@ namespace _device_interface_helpers {
  */
 template<typename T>
 struct kernel_interface {
+    /**
+     * @brief determine whether this kernel has the kernel(std::size_t, std::size_t) method defined.
+     * @return true if exists, false if not
+     */
+    static constexpr bool has_index_index_kernel() {
+        return _device_interface_helpers::args_index_index_test<T>::value;
+    }
+
+
+    /**
+     * @brief determine whether this kernel has the kernel(std::size_t) method defined.
+     * @return true if exists, false if not
+     */
+    static constexpr bool has_index_kernel() {
+        return _device_interface_helpers::args_index_test<T>::value;
+    }
+
     /**
      * @brief determine whether the to_device() function is defined
      * @return true or false if the function is defined

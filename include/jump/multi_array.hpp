@@ -326,7 +326,7 @@ public:
      * @brief access the shape with an indices representation
      * @return indices containg the sizes of all dimensions
      */
-    indices shape() {
+    indices shape() const {
         return size_;
     }
 
@@ -337,7 +337,7 @@ public:
      * @return the size of dimension dim
      */
     JUMP_INTEROPABLE
-    std::size_t shape(const std::size_t& dim) {
+    std::size_t shape(const std::size_t& dim) const {
         #if JUMP_ON_DEVICE
             assert(dim < size_.dims());
         #else
@@ -352,7 +352,7 @@ public:
      * @return the size 
      */
     JUMP_INTEROPABLE
-    std::size_t size() {
+    std::size_t size() const {
         std::size_t result = 1;
         for(std::size_t i = 0; i < size_.dims(); ++i) {
             result *= size_[i];

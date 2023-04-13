@@ -14,8 +14,25 @@ void foreach(jump::array<array_t>& array, const kernel& k) {
 
 template<typename kernel_t>
 void iterate(const std::size_t& count, const kernel_t& k) {
-    for(int i = 0; i < count; ++i) {
-        k(i);
+    static_assert(kernel_interface<kernel_t>::has_index_kernel(), "kernel_t must have kernel(std::size_t) defined");
+
+    if constexpr(kernel_interface<kernel_t>::has_index_kernel()) {
+        for(std::size_t i = 0; i < count; ++i) {
+            k.kernel(i);
+        }
+    }
+}
+
+template<typename kernel_t>
+void iterate(const std::size_t& c1, const std::size_t& c2, const kernel_t& k) {
+    static_assert(kernel_interface<kernel_t>::has_index_index_kernel(), "kernel_t must have kernel(std::size_t, std::size_t) defined");
+
+    if constexpr(kernel_interface<kernel_t>::has_index_index_kernel()) {
+        for(std::size_t i = 0; i < c1; ++i) {
+            for(std::size_t j = 0; j < c2; ++j){
+                k.kernel(i, j);
+            }
+        }
     }
 }
 
@@ -42,22 +59,26 @@ struct access_kernel {
         arr_(arr)
     {}
 
-    void operator()(const int& idx) const {
-        arr_.at(idx) = 2;
+    void kernel(const std::size_t& idx) const {
         std::printf("%d\n", arr_.at(idx));
+        arr_.at(idx) = 2;
     }
 
     jump::array<array_t> arr_;
 }; /* struct access_kernel */
 
 template<typename array_t>
-struct print_kernel {
+struct access_kernel2 {
+    access_kernel2(const jump::multi_array<array_t>& arr):
+        arr_(arr)
+    {}
 
-    void operator()(array_t& v) {
-        std::printf("%s\n", std::to_string(v).c_str());
+    void kernel(const std::size_t& x1, const std::size_t& x2) const {
+        std::printf("[%lu, %lu] %d\n", x1, x2, arr_.at(x1, x2));
     }
 
-};
+    jump::multi_array<array_t> arr_;
+}; /* struct access_kernel2 */
 
 int main(int argc, char** argv) {
     jump::array<int> v;
@@ -68,11 +89,9 @@ int main(int argc, char** argv) {
     jump::iterate(v.size(), access_kernel<int>(v));
 
     jump::multi_array<int> v2({10, 10, 10}, 10);
+    jump::iterate(v2.shape(0), v2.shape(1), access_kernel2<int>(v2));
+    // jump::iterate(v2.shape(), access_kernel<int>(v));
 
-
-    // jump::foreach(v2, print_kernel<int>());
-
-    // jump::iterate(v2.shape(), )
 
     return 0;
 }
