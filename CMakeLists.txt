@@ -36,7 +36,6 @@ endif()
 
 find_package(Eigen3 REQUIRED)
 
-
 include(CheckLanguage)
 check_language(CUDA)
 
@@ -46,7 +45,6 @@ if(${JUMP_BUILD_TESTS})
 endif()
 
 add_library(${PROJECT_NAME} INTERFACE)
-
 # We do this instead of compile_features() becase cxx_std_17 feature is not happy with CUDA
 target_compile_options(${PROJECT_NAME} INTERFACE -std=c++17)
 target_include_directories(${PROJECT_NAME} INTERFACE
@@ -54,6 +52,7 @@ target_include_directories(${PROJECT_NAME} INTERFACE
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/${PROJECT_NAME}>
 )
 target_link_libraries(${PROJECT_NAME} INTERFACE Eigen3::Eigen)
+
 
 # Goal of these functions is to setup a target with libaries and definitions to
 # enable a particular backend, and no other links or includes
