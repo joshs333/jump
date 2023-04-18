@@ -54,6 +54,10 @@ target_include_directories(${PROJECT_NAME} INTERFACE
 target_link_libraries(${PROJECT_NAME} INTERFACE Eigen3::Eigen)
 
 
+
+#####################################################################
+####################### Target Macros (to be moved later) ###########
+#####################################################################
 # Goal of these functions is to setup a target with libaries and definitions to
 # enable a particular backend, and no other links or includes
 # (wrt jump and it's dependencies) should be needed
@@ -106,6 +110,7 @@ if(${JUMP_BUILD_EXAMPLES})
         jump_cuda_executable(jump_multi_array_example src/examples/multi_array.cpp)
         jump_cuda_executable(jump_parallel_example src/examples/parallel.cpp)
         jump_cuda_executable(jump_octree_example src/examples/octree.cpp)
+        jump_cuda_executable(jump_threadpool_example src/examples/threadpool.cpp)
     endif()
 endif()
 
