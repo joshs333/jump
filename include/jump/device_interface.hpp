@@ -261,7 +261,6 @@ struct kernel_interface {
         return _device_interface_helpers::args_index_index_test<T>::value;
     }
 
-
     /**
      * @brief determine whether this kernel has the kernel(std::size_t) method defined.
      * @return true if exists, false if not

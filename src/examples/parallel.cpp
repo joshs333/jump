@@ -164,6 +164,9 @@ int main(int argc, char** argv) {
     // jump::iterate(v2.shape(), access_kernel<int>(v));
 
 
+    // jump::iterate(arr.shape(), {0, 1}, kernel{arr}, {.target = jump::par::threadpool, .cores = {1, 2, 3}});
+    // jump::iterate(arr.shape(), {0, 1}, kernel{arr}, {.target = jump::par::cuda, .cores = {1, 2, 3}});
+    // jump::iterate(arr.shape(), {0, 1}, kernel{arr}, {.target = jump::par::seq, .cores = {1, 2, 3}});
     return 0;
 }
 

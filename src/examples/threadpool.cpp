@@ -1,55 +1,52 @@
+#include <jump/threadpool.hpp>
 #include <cstdio>
+#include <atomic>
+#include <thread>
+#include <mutex>
+#include <map>
+#include <vector>
+#include <chrono>
+#include <queue>
+#include <memory>
+#include <functional>
 
-// https://eli.thegreenplace.net/2016/c11-threads-affinity-and-hyperthreading/#footnote-reference-1
 
-namespace jump {
+// The form of an executor
+template<typename T>
+class queue_executor {
+public:
+    queue_executor(
+        std::queue<T>& queue,
+        std::function<void(T)> function
+    ):
+        queue_(&queue),
+        function_(function)
+    {}
 
-class threadpool {
-    struct context {
-        std::atomic<std::size_t> active_threads_;
-
-        std::atomic<std::size_t> thread_id_;
-
-        bool should_stop() {
-        }
-
-        void shutdown() {
-        }
-
-        void set_affinity(std::size_t core_number) {
-        }
+    bool control(jump::threadpool::context& context) const {
+        std::scoped_lock l(queue_mutex_);
+        if(queue_->size() > 0)
+            return true;
+        context.shutdown();
+        return false;
     }
 
-    template<typename kernel_t>
-    void execute(const kernel_t& kernel, ) {
-        // I spawn the control thread and 
-    }
-
-    void controlThread() {
-        // I handle thread lifetime
-    }
-
-    void executorThread() {
-        // I handle some aspects of a threads lifetime (interacting with the control thread)
-        // and actually calling the kernel
-    }
-};
-
-}
-
-struct queue_executor {
-
-};
-
-struct executor {
-
-    bool spawn(jump::threadpool::context& context) const {
-
-    }
-
+    /// Shutdown can be called at any point during this execution
     void execute(jump::threadpool::context& context) const {
+        if(context.shutdown_called()) return;
+        queue_mutex_.lock();
+        if(queue_->size() <= 0) { queue_mutex_.unlock(); return; }
+        auto v = queue_->front();
+        queue_->pop();
+        queue_mutex_.unlock();
 
+        function_(v);
     }
+
+private:
+    std::queue<int>* queue_;
+    std::function<void(T)> function_;
+    mutable std::mutex queue_mutex_;
 
 };
 
@@ -57,8 +54,18 @@ struct executor {
 int main(int argc, char** argv) {
     std::printf("Threadpool example!\n");
 
-    // jump::iterate(arr.shape(), {0, 1}, kernel{arr}, {.target = jump::par::threadpool, .cores = {1, 2, 3}});
-    // jump::iterate(arr.shape(), {0, 1}, kernel{arr}, {.target = jump::par::cuda, .cores = {1, 2, 3}});
-    // jump::iterate(arr.shape(), {0, 1}, kernel{arr}, {.target = jump::par::seq, .cores = {1, 2, 3}});
+
+    auto queue = std::make_shared<std::queue<int>>();
+
+    for(int i = 0; i < 100; ++i) {
+        queue->push(i);
+    }
+
+    jump::threadpool pool;
+    pool.execute(queue_executor<int>(*queue, [&](int v){ 
+        std::printf("%d\n", v);
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }), 100);
+
     return 0;
 }
