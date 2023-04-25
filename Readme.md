@@ -23,3 +23,5 @@ octree
 - point based
 - container based (ray trace to first intersection, all intersections)
 
+## Open Questions
+- should I have made the kernels / executors const to be passed to the iterate / foreach calls

@@ -99,6 +99,10 @@ public:
         }
     };
 
+    threadpool():
+        executing_{false}
+    {}
+
     /**
      * @brief Destroy the threadpool object, making
      *  sure all threads are properly stopped

@@ -1,14 +1,97 @@
 // JUMP
+#include <jump/threadpool.hpp>
 #include <jump/parallel.hpp>
 #include <jump/multi_array.hpp>
 #include <jump/array.hpp>
 
+#include <mutex>
+
 namespace jump {
 
-template<typename kernel, typename array_t>
-void foreach(jump::array<array_t>& array, const kernel& k) {
-    for(std::size_t i = 0; i < array.size(); ++i) {
-        k(i, array.at(i));
+/**
+ * @brief arguments for parallel processing calls
+ *  such as foreach and iterate
+ */
+struct par {
+    enum target_t : uint8_t {
+        seq = 0,
+        threadpool = 1,
+        cuda = 2
+    };
+
+    //! The execution target for the parallelized call
+    target_t target = par::seq;
+    //! If target == par::threadpool, the number of threads to use
+    std::size_t thread_count = 3;
+};
+
+//! Namespace for executors used by foreach or iterate calls to call threadpool
+namespace parallel_executors {
+
+template<typename kernel_t, typename array_t>
+struct array_foreach {
+    array_foreach(
+        const kernel_t& kernel,
+        const jump::array<array_t>& array
+    ):
+        kernel_(&kernel),
+        array_(&array),
+        index_(0)
+    {}
+
+    // bool control(jump::threadpool::context& context) const {
+    //     std::scoped_lock l(index_mutex_);
+    //     if(index_ < array_->size())
+    //         return true;
+    //     context.shutdown();
+    //     return false;
+    // }
+
+    /// Shutdown can be called at any point during this execution
+    void execute(jump::threadpool::context& context) const {
+        if(context.shutdown_called()) return;
+        std::size_t my_index = 0;
+
+        while(true) {
+            {
+                std::scoped_lock l(index_mutex_);
+                if(index_ >= array_->size()) {
+                    context.shutdown();
+                    return;
+                }
+                my_index = index_++;
+            }
+
+            kernel_->kernel(my_index, array_->at(my_index));
+        }
+    }
+
+    const kernel_t* kernel_;
+    const jump::array<array_t>* array_;
+    mutable std::size_t index_;
+    mutable std::mutex index_mutex_;
+};
+
+} /* namespace parallel_executors */
+
+template<typename kernel_t, typename array_t>
+void foreach(
+    const jump::array<array_t>& array,
+    const kernel_t& k,
+    const par& options = par()
+) {
+    if(options.target == par::seq) {
+        for(std::size_t i = 0; i < array.size(); ++i) {
+            k.kernel(i, array.at(i));
+        }
+    } else if(options.target == par::threadpool) {
+        // jump::threadpool pool;
+        std::printf("threads: %lu\n", options.thread_count);
+        jump::threadpool().execute(parallel_executors::array_foreach(k, array), options.thread_count);
+    } else if(options.target == par::cuda) {
+        std::printf("Haven't gotten to cuda yet\n");
+    } else {
+        throw std::runtime_error("unknown target option");
     }
 }
 
@@ -39,7 +122,6 @@ void iterate(const std::size_t& c1, const std::size_t& c2, const kernel_t& k) {
 
 template<std::size_t _dim_size, typename kernel_t>
 void iterate(const jump::multi_indices<_dim_size>& shape, const kernel_t& k) {
-
     // if constexpr(kernel_interface<kernel_t>::has_index_index_kernel()) {
     //     for(std::size_t i = 0; i < c1; ++i) {
     //         for(std::size_t j = 0; j < c2; ++j){
@@ -60,8 +142,12 @@ void foreach(jump::multi_array<array_t>& array, const std::size_t& iter_dim, con
 }
 
 struct multiplier_kernel {
-    void operator()(std::size_t& index, int& i) const {
+    void kernel(std::size_t& index, int& i) const {
         i = index * index;
+        // for(int i = 0; i < 10; ++i) {
+        //     auto b = i * i * i * i;
+        // }
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
         std::printf("Functor.. %lu %d\n", index, i);
     }
 }; /* struct multiplier_kernel */
@@ -121,7 +207,7 @@ struct access_kernel3 {
 
 
 int main(int argc, char** argv) {
-
+    // this should probably evolve into unit tests
     jump::indices idx(5, 3, 3);
     jump::indices idx2(5, 3, 4);
     jump::indices shh(6, 4, 7);
@@ -144,22 +230,33 @@ int main(int argc, char** argv) {
     std::printf("%lu, %lu, %lu\n", idx[0], idx[1], idx[2]);
     ++idx %= shh;
     std::printf("%lu, %lu, %lu\n", idx[0], idx[1], idx[2]);
-
-    return 0;
-
     std::printf("\n\n");
 
     jump::array<int> v;
-    v.push_back(1);
-    v.push_back(2);
-    v.push_back(3);
+
+    for(int i = 0; i < 500; ++i) {
+        v.push_back(i);
+    }
+    auto bef = std::chrono::system_clock::now();
     jump::foreach(v, multiplier_kernel());
-    jump::iterate(v.size(), access_kernel<int>(v));
+    auto af = std::chrono::system_clock::now();
+    double ns_seq = static_cast<double>(std::chrono::duration_cast<std::chrono::milliseconds>(af - bef).count());
+    std::printf("%3.0f ns\n", ns_seq);
+    bef = std::chrono::system_clock::now();
+    jump::foreach(v, multiplier_kernel(), {.target = jump::par::threadpool, .thread_count = 3});
+    af = std::chrono::system_clock::now();
+    double ns_threadpool = static_cast<double>(std::chrono::duration_cast<std::chrono::milliseconds>(af - bef).count());
+    std::printf("%3.0f ns\n", ns_threadpool);
+    std::printf("Threadpool took %3.0f ms %s than seq\n",
+        std::abs(ns_threadpool - ns_seq),
+        ns_threadpool > ns_seq ? "more" : "less"
+    );
+    // jump::iterate(v.size(), access_kernel<int>(v));
 
-    std::printf("\n\n");
+    // std::printf("\n\n");
 
-    jump::multi_array<int> v2({10, 10, 10}, 10);
-    jump::iterate(v2.shape(0), v2.shape(1), access_kernel2<int>(v2));
+    // jump::multi_array<int> v2({10, 10, 10}, 10);
+    // jump::iterate(v2.shape(0), v2.shape(1), access_kernel2<int>(v2));
     // jump::iterate(v2.shape(), access_kernel3<int>(v2));
     // jump::iterate(v2.shape(), access_kernel<int>(v));
 
