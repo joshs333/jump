@@ -171,6 +171,7 @@ inline void device_thread_sync() {
 //! A few functions to help perform constexpr evaluation of types
 //! to determine compatibility / interfacing
 namespace _device_interface_helpers {
+
     // This overload is selected if T.kernel(std::size_t) exists
     template <typename T>
     constexpr auto args_index_overload(int) -> decltype( std::declval<T>().kernel(static_cast<std::size_t>(0)), std::true_type{} );
@@ -243,6 +244,18 @@ namespace _device_interface_helpers {
     template <typename T>
     using device_compatible_defined_test = decltype( device_compatible_defined_overload<T>(0) );
 
+    // This overload of from_device_defined_overload is selected if T::device_compatible exists
+    template <typename KernelT, typename... Args>
+    constexpr auto kernel_args_overload(int) -> decltype( std::declval<KernelT>().kernel(std::declval<Args>()...), std::true_type{} );
+
+    // This overload is selected if the above overload fails (T.from_device() expression is invalid)
+    template <typename, typename... Args>
+    constexpr auto kernel_args_overload(long) -> std::false_type;
+
+    // this evaluates if a kernel has a kernel() call that takes Arguments...
+    template<typename KernelT, typename... Arguments>
+    using kernel_args_test = decltype( kernel_args_overload<KernelT, Arguments...>(0));
+
 } /* namespace _device_interface_helpers */
 
 
@@ -251,14 +264,25 @@ namespace _device_interface_helpers {
  *  usage as a kernel
  * @tparam T the type to evaluate
  */
-template<typename T>
+template<typename KernelT>
 struct kernel_interface {
+    /**
+     * @brief used to determine if KernelT has a kernel() call
+     *  that takes Arguments...
+     * @tparam Arguments the types to pass to kernel() to see if it exsits
+     * @return true if kernel(Arguments...) exists, false if not
+     */
+    template<typename... Arguments>
+    static constexpr bool has_kernel() {
+        return _device_interface_helpers::kernel_args_test<KernelT, Arguments...>::value;
+    }
+
     /**
      * @brief determine whether this kernel has the kernel(std::size_t, std::size_t) method defined.
      * @return true if exists, false if not
      */
     static constexpr bool has_index_index_kernel() {
-        return _device_interface_helpers::args_index_index_test<T>::value;
+        return _device_interface_helpers::args_index_index_test<KernelT>::value;
     }
 
     /**
@@ -266,7 +290,7 @@ struct kernel_interface {
      * @return true if exists, false if not
      */
     static constexpr bool has_index_kernel() {
-        return _device_interface_helpers::args_index_test<T>::value;
+        return _device_interface_helpers::args_index_test<KernelT>::value;
     }
 
     /**
@@ -274,7 +298,7 @@ struct kernel_interface {
      * @return true or false if the function is defined
      */
     static constexpr bool to_device_defined() {
-        return _device_interface_helpers::to_device_defined_test<T>::value;
+        return _device_interface_helpers::to_device_defined_test<KernelT>::value;
     }
 
     /**
@@ -282,7 +306,7 @@ struct kernel_interface {
      * @return true or false if the function is defined
      */
     static constexpr bool from_device_defined() {
-        return _device_interface_helpers::from_device_defined_test<T>::value;
+        return _device_interface_helpers::from_device_defined_test<KernelT>::value;
     }
     
     /**
@@ -290,8 +314,8 @@ struct kernel_interface {
      * @return the value of T::host_compatible if it exists, otherwise default to true
      */
     static constexpr bool host_compatible() {
-        if constexpr(_device_interface_helpers::host_compatible_defined_test<T>::value) {
-            return T::host_compatible;
+        if constexpr(_device_interface_helpers::host_compatible_defined_test<KernelT>::value) {
+            return KernelT::host_compatible;
         }
         return true;
     }
@@ -301,8 +325,8 @@ struct kernel_interface {
      * @return the value of T::device_compatible if it exists, otherwise default to true
      */
     static constexpr bool device_compatible() {
-        if constexpr(_device_interface_helpers::device_compatible_defined_test<T>::value) {
-            return T::device_compatible;
+        if constexpr(_device_interface_helpers::device_compatible_defined_test<KernelT>::value) {
+            return KernelT::device_compatible;
         }
         return true;
     }

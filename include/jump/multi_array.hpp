@@ -124,6 +124,7 @@ struct axes {
     }
 
     bool axes_[_max_dims];
+
 }; /* struct axes */
 
 
@@ -132,6 +133,16 @@ struct axes {
  */
 template<std::size_t _max_dims = 4>
 struct multi_indices {
+    JUMP_INTEROPABLE
+    static multi_indices zero(const std::size_t& size = _max_dims) {
+        multi_indices result;
+        for(std::size_t i = 0; i < size; ++i) {
+            result[i] = 0;
+        }
+        result.dim_count_ = size;
+        return result;
+    }
+
     // TODO: Define conversion!
     // template<std::size_t _other_dims>
     // multi_indices(const multi_indices& other_multi_indices) {
@@ -225,6 +236,15 @@ struct multi_indices {
     }
 
     JUMP_INTEROPABLE
+    std::size_t offset() const {
+        std::size_t result = 1;
+        for(std::size_t i = 0 ; i < dims(); ++i) {
+            result *= multi_indices_[i];
+        }
+        return result;
+    }
+
+    JUMP_INTEROPABLE
     multi_indices& operator++() {
         if(dim_count_ == 0) return *this;
         for(std::size_t i = 1; i <= dim_count_; ++i) {
@@ -249,7 +269,7 @@ struct multi_indices {
     JUMP_INTEROPABLE
     multi_indices& operator%=(const multi_indices& other) {
         if(dim_count_ == 0) return *this;
-        for(std::size_t i = 1; i <= dim_count_; ++i) {
+        for(std::size_t i = 1; i <= dim_count_ - 1; ++i) {
             if (multi_indices_[dim_count_ - i] >= other.multi_indices_[dim_count_ - i]) {
                 if(i < dim_count_) {
                     multi_indices_[dim_count_ - i - 1] += multi_indices_[dim_count_ - i] / other.multi_indices_[dim_count_ - i];
@@ -274,26 +294,38 @@ struct multi_indices {
     JUMP_INTEROPABLE
     bool operator<(const multi_indices& other) {
         for(std::size_t i = 0; i < dim_count_ && i < other.dim_count_; ++i) {
+            // if we are greater than the other, we definitely aren't less
+            if(multi_indices_[i] > other.multi_indices_[i])
+                return false;
+            // if we are less than the other, we are definitely less
             if(multi_indices_[i] < other.multi_indices_[i])
                 return true;
         }
+        // if we go through all the indices higher order to lower and
+        // haven't returned yet, all are equal and we are not less than
         return false;
     }
 
     JUMP_INTEROPABLE
     bool operator<=(const multi_indices& other) {
         for(std::size_t i = 0; i < dim_count_ && i < other.dim_count_; ++i) {
+            // if we are greater we definitely aren't less
             if(multi_indices_[i] > other.multi_indices_[i])
                 return false;
         }
+        // if we get here, each index is either less or equal and we are good
         return true;
     }
 
     JUMP_INTEROPABLE
     bool operator>(const multi_indices& other) {
         for(std::size_t i = 0; i < dim_count_ && i < other.dim_count_; ++i) {
+            // a higher index is higher, we are higher
             if(multi_indices_[i] > other.multi_indices_[i])
                 return true;
+            // a higher index is lower, we are lower
+            if(multi_indices_[i] < other.multi_indices_[i])
+                return false;
         }
         return false;
     }
@@ -331,6 +363,8 @@ using indices = multi_indices<>;
 template<typename T, std::size_t _max_dims = 4>
 class multi_array {
 public:
+    using indices = multi_indices<_max_dims>;
+
     /**
      * @brief construct a new multi_array with the default initializer 
      *  for contained objects
@@ -429,8 +463,20 @@ public:
      * @brief access the shape with an multi_indices representation
      * @return multi_indices containg the sizes of all dimensions
      */
+    JUMP_INTEROPABLE
     multi_indices<_max_dims> shape() const {
         return size_;
+    }
+
+    /**
+     * @brief get a zero index indices
+     * @return multi_indices of the same type used by this multi_array with all zeros
+     */
+    JUMP_INTEROPABLE
+    multi_indices<_max_dims> zero() const {
+        auto result = multi_indices<_max_dims>();
+        result.dim_count_ = size_.dims();
+        return result;
     }
 
     /**

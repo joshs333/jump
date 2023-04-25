@@ -23,5 +23,14 @@ octree
 - point based
 - container based (ray trace to first intersection, all intersections)
 
-## Open Questions
+## Open Questions / To-Do's
 - should I have made the kernels / executors const to be passed to the iterate / foreach calls
+- how to handle different (max) dimension indices / multi_arrays
+- indices operators (and handling the difference between representing size vs an index)
+- make foreach / iterate callable from device??
+- make cuda calls for multi_array use 3d blocks or whatevs? (easy to hit limit with three dimensional array)
+
+# Foreach kernels
+struct k {
+    void kernel()
+}
