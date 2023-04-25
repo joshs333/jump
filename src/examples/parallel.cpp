@@ -23,6 +23,9 @@ struct par {
     target_t target = par::seq;
     //! If target == par::threadpool, the number of threads to use
     std::size_t thread_count = 3;
+
+    //! If target == par::cuda, the number of threads per block in the cuda call
+    std::size_t threads_per_block = 512;
 };
 
 //! Namespace for executors used by foreach or iterate calls to call threadpool
@@ -74,10 +77,28 @@ struct array_foreach {
 
 } /* namespace parallel_executors */
 
+//! cuda kernels to enable foreach and iterate calls to use the cuda backend
+namespace parallel_cuda_kernels {
+
+template<typename kernel_t, typename array_t>
+__global__
+void array_foreach(
+    kernel_t kernel,
+    jump::array<array_t> array
+) {
+    std::size_t my_index = blockIdx.x * blockDim.x + threadIdx.x;
+    if(my_index >= array.size()) return;
+
+    kernel.kernel(my_index, array.at(my_index));
+}
+
+
+}; /* namespace parallel_cuda_kernels */
+
 template<typename kernel_t, typename array_t>
 void foreach(
-    const jump::array<array_t>& array,
-    const kernel_t& k,
+    jump::array<array_t>& array,
+    kernel_t k,
     const par& options = par()
 ) {
     if(options.target == par::seq) {
@@ -86,10 +107,33 @@ void foreach(
         }
     } else if(options.target == par::threadpool) {
         // jump::threadpool pool;
-        std::printf("threads: %lu\n", options.thread_count);
         jump::threadpool().execute(parallel_executors::array_foreach(k, array), options.thread_count);
     } else if(options.target == par::cuda) {
-        std::printf("Haven't gotten to cuda yet\n");
+        #if JUMP_ENABLE_CUDA
+            if constexpr(kernel_interface<kernel_t>::device_compatible()) {
+                // Setup
+                if constexpr(kernel_interface<kernel_t>::to_device_defined()) {
+                    k.to_device();
+                }
+                array.to_device();
+
+                auto num_blocks = (int) std::ceil(array.size() / static_cast<float>(options.threads_per_block));
+
+                // Call
+                parallel_cuda_kernels::array_foreach<<<num_blocks, options.threads_per_block>>>(k, array);
+                cudaDeviceSynchronize();
+
+                // Cleanup!
+                if constexpr(kernel_interface<kernel_t>::from_device_defined()) {
+                    k.from_device();
+                }
+                array.from_device();
+            } else {
+                throw jump::device_incompatible_exception("unable to execute foreach call with cuda, kernel incompatible");
+            }
+        #else
+            throw jump::no_cuda_exception("unable to parallelize with cuda");
+        #endif
     } else {
         throw std::runtime_error("unknown target option");
     }
@@ -142,12 +186,18 @@ void foreach(jump::multi_array<array_t>& array, const std::size_t& iter_dim, con
 }
 
 struct multiplier_kernel {
+    static const bool device_compatible = true;
+
+    JUMP_INTEROPABLE
     void kernel(std::size_t& index, int& i) const {
         i = index * index;
-        // for(int i = 0; i < 10; ++i) {
-        //     auto b = i * i * i * i;
-        // }
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        #if JUMP_ON_DEVICE
+            for(int i = 0; i < 100; ++i) {
+                auto b = i * i * i * i;
+            }
+        #else
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        #endif
         std::printf("Functor.. %lu %d\n", index, i);
     }
 }; /* struct multiplier_kernel */
@@ -234,22 +284,40 @@ int main(int argc, char** argv) {
 
     jump::array<int> v;
 
-    for(int i = 0; i < 500; ++i) {
+    for(int i = 0; i < 100; ++i) {
         v.push_back(i);
     }
     auto bef = std::chrono::system_clock::now();
     jump::foreach(v, multiplier_kernel());
     auto af = std::chrono::system_clock::now();
     double ns_seq = static_cast<double>(std::chrono::duration_cast<std::chrono::milliseconds>(af - bef).count());
-    std::printf("%3.0f ns\n", ns_seq);
+    std::printf("%3.0f ms\n", ns_seq);
+
     bef = std::chrono::system_clock::now();
     jump::foreach(v, multiplier_kernel(), {.target = jump::par::threadpool, .thread_count = 3});
     af = std::chrono::system_clock::now();
     double ns_threadpool = static_cast<double>(std::chrono::duration_cast<std::chrono::milliseconds>(af - bef).count());
-    std::printf("%3.0f ns\n", ns_threadpool);
+    std::printf("%3.0f ms\n", ns_threadpool);
+
+
+    bef = std::chrono::system_clock::now();
+    jump::foreach(v, multiplier_kernel(), {.target = jump::par::cuda, .thread_count = 3});
+    af = std::chrono::system_clock::now();
+    double ns_cuda = static_cast<double>(std::chrono::duration_cast<std::chrono::milliseconds>(af - bef).count());
+    std::printf("%3.0f ms\n", ns_cuda);
+
     std::printf("Threadpool took %3.0f ms %s than seq\n",
         std::abs(ns_threadpool - ns_seq),
         ns_threadpool > ns_seq ? "more" : "less"
+    );
+
+    std::printf("Threadpool took %3.0f ms %s than cuda\n",
+        std::abs(ns_threadpool - ns_cuda),
+        ns_threadpool > ns_cuda ? "more" : "less"
+    );
+
+    std::printf("multiplier_kernel device compatible?? %s\n",
+        jump::kernel_interface<multiplier_kernel>::device_compatible() ? "true" : "false"
     );
     // jump::iterate(v.size(), access_kernel<int>(v));
 

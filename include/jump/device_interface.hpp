@@ -416,6 +416,24 @@ public:
 
 }; /* class no_devices_exception */
 
+/**
+ * @brief error to express that there are no devices to run on
+ *  (usually used when jump::devices_available() evaluates to false)
+ */
+class device_incompatible_exception : public std::exception {
+public:
+    device_incompatible_exception(const std::string& msg = ""):
+        message_("No devices available: " + msg)
+    {}
+
+    const char* what() const noexcept {
+        return message_.c_str();
+    }
+
+    std::string message_;
+
+}; /* class device_incompatible_exception */
+
 } /* namespace jump */
 
 #endif /* JUMP_DEVICE_INTERFACE_HPP_ */

@@ -19,7 +19,7 @@ void testPrint() {
         deviceOnlyFunc();
         std::printf("Hello you! Device: %s\n", "true");
     #else
-        std::printf("Hello yous! Host: %s\n", "false");
+        std::printf("Hello you! Host: %s\n", "false");
     #endif
     jump::device_thread_sync();
 }
