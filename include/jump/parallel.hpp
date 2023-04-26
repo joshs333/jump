@@ -124,7 +124,7 @@ struct array_foreach {
 template<typename kernel_t, typename array_t>
 struct multi_array_foreach {
     /**
-     * @brief create a new array_foreach executor
+     * @brief create a new multi_array_foreach executor
      * @param kernel the kernel to use
      * @param array the array to use
      * @note we assume that kernel and array will exist in the high-level caller
@@ -220,10 +220,10 @@ struct multi_array_foreach {
 template<typename kernel_t>
 struct iteration {
     /**
-     * @brief create a new array_foreach executor
+     * @brief create a new iteration executor
      * @param kernel the kernel to use
-     * @param array the array to use
-     * @note we assume that kernel and array will exist in the high-level caller
+     * @param range the range to perform iteration over
+     * @note we assume that kernel will exist in the high-level caller
      *  for the lifetime of the executor, and only take a reference to it
      */
     iteration(
@@ -461,7 +461,7 @@ void iteration(
 template<typename kernel_t, typename array_t>
 void foreach(
     jump::array<array_t>& array,
-    const kernel_t& kernel,
+    kernel_t kernel,
     const par& options = par()
 ) {
     constexpr bool has_index_val_kernel = kernel_interface<kernel_t >::template has_kernel<const std::size_t&, array_t&>();
@@ -526,7 +526,7 @@ void foreach(
 template<typename kernel_t, typename array_t>
 void foreach(
     jump::multi_array<array_t>& array,
-    const kernel_t& kernel,
+    kernel_t kernel,
     const par& options = par()
 ) {
     constexpr bool has_i_v_kernel = kernel_interface<kernel_t >::template has_kernel<const std::size_t&, array_t&>();
@@ -633,7 +633,7 @@ void foreach(
 template<typename kernel_t>
 void iterate(
     const indices& range,
-    const kernel_t& kernel,
+    kernel_t kernel,
     const par& options = par()
 ) {
     constexpr bool has_i_kernel = kernel_interface<kernel_t >::template has_kernel<const std::size_t&>();
@@ -725,7 +725,7 @@ void iterate(
 template<typename kernel_t>
 void iterate(
     const std::size_t& r1,
-    const kernel_t& kernel,
+    kernel_t kernel,
     const par& options = par()
 ) {
     iterate(indices(r1), kernel, options);
@@ -743,7 +743,7 @@ template<typename kernel_t>
 void iterate(
     const std::size_t& r1,
     const std::size_t& r2,
-    const kernel_t& kernel, 
+    kernel_t kernel, 
     const par& options = par()
 ) {
     iterate(indices(r1, r2), kernel, options);
@@ -764,7 +764,7 @@ void iterate(
     const std::size_t& r1,
     const std::size_t& r2,
     const std::size_t& r3,
-    const kernel_t& kernel,
+    kernel_t kernel,
     const par& options = par()
 ) {
     iterate(indices(r1, r2, r3), kernel, options);

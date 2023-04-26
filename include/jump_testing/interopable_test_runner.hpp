@@ -36,7 +36,7 @@ namespace interopable_test_runner_helpers {
     } /* runTest */
 #endif
 
-} /* namepsace interopable_test_runner_helpers */
+} /* namepspace interopable_test_runner_helpers */
 
 
 //! The example structure of an interopable test
@@ -115,9 +115,8 @@ public:
         #endif
     }
 
-}; /* jump_testing */
+}; /* struct InteropableTestRunner */
 
+} /* namespace jump_testing */
 
-} /* namespace jcontrols_testing */
-
-#endif /* JCONTROLS_TESTING_INTEROPABLE_TESTING_HPP_ */
+#endif /* JUMP_TESTING_INTEROPABLE_TEST_RUNNER_HPP_ */

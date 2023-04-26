@@ -150,66 +150,54 @@ void iterate_testing() {
     jump::iterate(3, 3, 3, iterate_indice_kernel(), {.target = jump::par::threadpool});
 }
 
-
-template<typename array_t>
-struct access_kernel {
-    access_kernel(const jump::array<array_t>& arr):
+struct int_print_kernel {
+    int_print_kernel(const jump::multi_array<int>& arr):
         arr_(arr)
     {}
 
-    void kernel(const std::size_t& idx) const {
-        std::printf("%d\n", arr_.at(idx));
-        arr_.at(idx) = 2;
-    }
-
-    jump::array<array_t> arr_;
-}; /* struct access_kernel */
-
-template<typename array_t>
-struct access_kernel2 {
-    access_kernel2(const jump::multi_array<array_t>& arr):
-        arr_(arr)
-    {}
-
-    void kernel(const std::size_t& x1, const std::size_t& x2) const {
-        std::printf("[%lu, %lu] %d %lu\n", x1, x2, arr_.at(x1, x2), x1 * x2);
-    }
-
-    jump::multi_array<array_t> arr_;
-}; /* struct access_kernel2 */
-
-template<typename array_t>
-struct access_kernel2shape {
-    access_kernel2shape(const jump::multi_array<array_t>& arr):
-        arr_(arr)
-    {}
-
-    void kernel(const jump::indices& idx) const {
-        std::printf("[%lu, %lu] %d %lu\n", idx[0], idx[1], arr_.at(idx));
-    }
-
-    jump::multi_array<array_t> arr_;
-}; /* struct access_kernel2shape */
-
-template<typename array_t>
-struct access_kernel3 {
-    access_kernel3(const jump::multi_array<array_t>& arr):
-        arr_(arr)
-    {}
-
+    JUMP_INTEROPABLE
     void kernel(const std::size_t& x1, const std::size_t& x2, const std::size_t& x3) const {
-        std::printf("[%lu, %lu] %d %lu\n", x1, x2, arr_.at(x1, x2), x1 * x2);
+        std::printf("[%lu, %lu, %lu] %d\n", x1, x2, x3, arr_.at(x1, x2, x3));
     }
 
-    jump::multi_array<array_t> arr_;
+    JUMP_INTEROPABLE
+    void kernel(const std::size_t& x1, const std::size_t& x2) const {
+        std::printf("[%lu, %lu] %d\n", x1, x2, arr_.at(x1, x2));
+    }
+
+    JUMP_INTEROPABLE
+    void kernel(const std::size_t& x1) const {
+        std::printf("[%lu] %d\n", x1, arr_.at(x1));
+    }
+
+    void to_device() {
+        arr_.to_device();
+    }
+
+    void from_device() {
+        arr_.from_device();
+    }
+
+    jump::multi_array<int> arr_;
 }; /* struct access_kernel3 */
+
+void iterate_multi_array_testing() {
+    jump::multi_array<int> arr1({9}, 1);
+    jump::multi_array<int> arr2({3, 3}, 2);
+    jump::multi_array<int> arr3({2, 2, 2}, 3);
+    jump::iterate(arr1.shape(), int_print_kernel(arr1), {.target = jump::par::seq});
+    jump::iterate(arr2.shape(), int_print_kernel(arr2), {.target = jump::par::threadpool});
+    jump::iterate(arr3.shape(), int_print_kernel(arr3), {.target = jump::par::cuda});
+}
+
 
 int main(int argc, char** argv) {
     // this should probably evolve into unit tests
-    // index_testing();
-    // array_foreach_testing();
-    // multi_array_foreach_testing();
+    index_testing();
+    array_foreach_testing();
+    multi_array_foreach_testing();
     iterate_testing();
+    iterate_multi_array_testing();
 
     // std::printf("\n\n");
 

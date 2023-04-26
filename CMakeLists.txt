@@ -14,35 +14,67 @@ if(NOT CMAKE_CXX_STANDARD)
     set(CMAKE_CXX_STANDARD 17)
 endif()
 
-# Includes for installation
-include(GNUInstallDirs)
-include(CMakePackageConfigHelpers)
-
 #####################################################################
 ####################### Misc. Project Setup #########################
 #####################################################################
 set(JUMP_VERSION 0.1)
 
+project(jump VERSION ${JUMP_VERSION} LANGUAGES CXX)
+
 ### OPTIONS
 option(JUMP_BUILD_TESTS "Build tests" ON)
 option(JUMP_BUILD_EXAMPLES "Build examples" ON)
 option(JUMP_ENABLE_CUDA "Enable CUDA as a parallelization backend" ON)
+option(JUMP_BUILD_DOCS "Build documentation with doxygen" ON)
 
 if(${JUMP_ENABLE_CUDA})
-    project(jump VERSION ${JUMP_VERSION} LANGUAGES CXX CUDA)
-else()
-    project(jump VERSION ${JUMP_VERSION} LANGUAGES CXX)
+    # include(CheckLanguage)
+    # check_language(CUDA)
+
+    if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
+        set(CMAKE_CUDA_ARCHITECTURES 75)
+    endif()
+
+    enable_language(CUDA)
 endif()
-
-find_package(Eigen3 REQUIRED)
-
-include(CheckLanguage)
-check_language(CUDA)
 
 if(${JUMP_BUILD_TESTS})
     include(GoogleTest)
     enable_testing()
 endif()
+
+# Includes for target definition
+include(cmake/jumpMacros.cmake)
+
+# Includes for installation
+include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
+
+#####################################################################
+####################### Documentation Building ######################
+#####################################################################
+
+if(${JUMP_BUILD_DOCS})
+    # Thanks to https://vicrucann.github.io/tutorials/quick-cmake-doxygen/
+    find_package(Doxygen)
+
+    if(DOXYGEN_FOUND)
+        add_custom_target(docs ALL
+            COMMAND ${DOXYGEN_EXECUTABLE} ${PROJECT_SOURCE_DIR}/.doxygen
+            WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+            COMMENT "Generating API Documentation with Doxygen"
+            VERBATIM
+        )
+    else()
+        message(SEND_ERROR "Doxygen must be installed to generate doxygen documentation")
+    endif()
+
+endif()
+
+#####################################################################
+####################### Library Definition ##########################
+#####################################################################
+find_package(Eigen3 REQUIRED)
 
 add_library(${PROJECT_NAME} INTERFACE)
 # We do this instead of compile_features() becase cxx_std_17 feature is not happy with CUDA
@@ -53,40 +85,10 @@ target_include_directories(${PROJECT_NAME} INTERFACE
 )
 target_link_libraries(${PROJECT_NAME} INTERFACE Eigen3::Eigen)
 
-
-
 #####################################################################
 ####################### Target Macros (to be moved later) ###########
 #####################################################################
-# Goal of these functions is to setup a target with libaries and definitions to
-# enable a particular backend, and no other links or includes
-# (wrt jump and it's dependencies) should be needed
-function(jump_cuda_target target_name)
-    enable_language(CUDA)
-    message(STATUS "[JUMP][${target_name}] CUDA Compiler Version: ${CMAKE_CUDA_COMPILER_VERSION}")
-    find_package(CUDA REQUIRED)
-    message(STATUS "[JUMP][${target_name}] CUDA Version: ${CUDA_VERSION}")
 
-    set_property(TARGET ${target_name} PROPERTY CUDA_SEPARABLE_COMPILATION ON)
-    target_compile_definitions(${target_name} PUBLIC JUMP_ENABLE_CUDA)
-    target_link_libraries(${target_name} PUBLIC jump ${CUDA_LIBRARIES})
-    target_include_directories(${target_name} PRIVATE ${CUDA_INCLUDE_DIRS})
-
-    set(NVCC_ARGS ${NVCC_ARGS} --expt-relaxed-constexpr -Xcudafe "--diag_suppress=20012 --display_error_number")
-    target_compile_options(${target_name} PUBLIC $<$<COMPILE_LANGUAGE:CUDA>:${NVCC_ARGS}>)
-endfunction()
-
-# Mark sources as cuda even if the extension is not .cuh
-function(jump_cuda_sources)
-    set_source_files_properties(${ARGN} PROPERTIES LANGUAGE CUDA)
-endfunction()
-
-# Create a new executable and call jump_cuda_target and jump_cuda_sources on it
-function(jump_cuda_executable target_name)
-    add_executable(${target_name} ${ARGN})
-    jump_cuda_target(${target_name})
-    jump_cuda_sources(${ARGN})
-endfunction()
 
 # Mark an executable as a test (link gtest / deps & call gtest_discover_tests on it)
 function(jump_test target_name)
@@ -173,6 +175,7 @@ install(EXPORT ${PROJECT_NAME}_Targets
 install(
     FILES "${PROJECT_BINARY_DIR}/${PROJECT_NAME}Config.cmake"
         "${PROJECT_BINARY_DIR}/${PROJECT_NAME}ConfigVersion.cmake"
+        "${PROJECT_SOURCE_DIR}/cmake/${PROJECT_NAME}Macros.cmake"
     DESTINATION lib/cmake/${PROJECT_NAME}
 )
 

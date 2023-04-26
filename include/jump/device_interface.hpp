@@ -25,7 +25,9 @@
     #define JUMP_DEVICE_ONLY __device__
     #define JUMP_INTEROPABLE __host__ __device__
 #else
+    //! A function that is only compatible with running on the GPU
     #define JUMP_DEVICE_ONLY
+    //! A function that is only compatible with GPU or CPU
     #define JUMP_INTEROPABLE
 #endif
 
@@ -35,6 +37,7 @@
 #ifdef __CUDA_ARCH__
     #define JUMP_ON_DEVICE true
 #else
+    //! Dictates whether the function is being compiled for running ond device (or not)
     #define JUMP_ON_DEVICE false
 #endif
 
@@ -172,87 +175,87 @@ inline void device_thread_sync() {
 //! to determine compatibility / interfacing
 namespace _device_interface_helpers {
 
-    // This overload is selected if T.kernel(std::size_t) exists
+    //! This overload is selected if T.kernel(std::size_t) exists
     template <typename T>
     constexpr auto args_index_overload(int) -> decltype( std::declval<T>().kernel(static_cast<std::size_t>(0)), std::true_type{} );
 
-    // This overload is selected if T.kernel(std::size_t) fails
+    //! This overload is selected if T.kernel(std::size_t) fails
     template <typename>
     constexpr auto args_index_overload(long) -> std::false_type;
 
-    // This tests if T.kernel(std::size_t) is defined
+    //! This tests if T.kernel(std::size_t) is defined
     template <typename T>
     using args_index_test = decltype( args_index_overload<T>(0) );
 
-    // This overload is selected if T.kernel(std::size_t, std::size_t) exists
+    //! This overload is selected if T.kernel(std::size_t, std::size_t) exists
     template <typename T>
     constexpr auto args_index_index_overload(int) -> decltype( std::declval<T>().kernel(static_cast<std::size_t>(0), static_cast<std::size_t>(0)), std::true_type{} );
 
-    // This overload is selected if T.kernel(std::size_t, std::size_t) fails
+    //! This overload is selected if T.kernel(std::size_t, std::size_t) fails
     template <typename>
     constexpr auto args_index_index_overload(long) -> std::false_type;
 
-    // This tests if T.kernel(std::size_t, std::size_t) is defined
+    //! This tests if T.kernel(std::size_t, std::size_t) is defined
     template <typename T>
     using args_index_index_test = decltype( args_index_index_overload<T>(0) );
 
-    // This overload of to_device_defined_overload is selected if T.to_device() exists
+    //! This overload of to_device_defined_overload is selected if T.to_device() exists
     template <typename T>
     constexpr auto to_device_defined_overload(int) -> decltype( std::declval<T>().to_device(), std::true_type{} );
 
-    // This overload is selected if the above overload fails (T.to_device() expression is invalid)
+    //! This overload is selected if the above overload fails (T.to_device() expression is invalid)
     template <typename>
     constexpr auto to_device_defined_overload(long) -> std::false_type;
 
-    // This evaluates if to_device() is defined using the overloads above
+    //! This evaluates if to_device() is defined using the overloads above
     template <typename T>
     using to_device_defined_test = decltype( to_device_defined_overload<T>(0) );
 
-    // This overload of from_device_defined_overload is selected if T.from_device() exists
+    //! This overload of from_device_defined_overload is selected if T.from_device() exists
     template <typename T>
     constexpr auto from_device_defined_overload(int) -> decltype( std::declval<T>().from_device(), std::true_type{} );
 
-    // This overload is selected if the above overload fails (T.from_device() expression is invalid)
+    //! This overload is selected if the above overload fails (T.from_device() expression is invalid)
     template <typename>
     constexpr auto from_device_defined_overload(long) -> std::false_type;
 
-    // This evaluates if from_device() is defined using the overloads above
+    //! This evaluates if from_device() is defined using the overloads above
     template <typename T>
     using from_device_defined_test = decltype( from_device_defined_overload<T>(0) );
 
-    // This overload of host_compatible_defined_overload is selected if T::host_compatible exists
+    //! This overload of host_compatible_defined_overload is selected if T::host_compatible exists
     template <typename T>
     constexpr auto host_compatible_defined_overload(int) -> decltype( T::host_compatible, std::true_type{} );
 
-    // This overload is selected if the above overload fails (T::host_compatible expression is invalid)
+    //! This overload is selected if the above overload fails (T::host_compatible expression is invalid)
     template <typename>
     constexpr auto host_compatible_defined_overload(long) -> std::false_type;
 
-    // This evaluates if T::host_compatible is defined using the overloads above
+    //! This evaluates if T::host_compatible is defined using the overloads above
     template <typename T>
     using host_compatible_defined_test = decltype( host_compatible_defined_overload<T>(0) );
 
-    // This overload of from_device_defined_overload is selected if T::device_compatible exists
+    //! This overload of from_device_defined_overload is selected if T::device_compatible exists
     template <typename T>
     constexpr auto device_compatible_defined_overload(int) -> decltype( T::device_compatible, std::true_type{} );
 
-    // This overload is selected if the above overload fails (T.from_device() expression is invalid)
+    //! This overload is selected if the above overload fails (T.from_device() expression is invalid)
     template <typename>
     constexpr auto device_compatible_defined_overload(long) -> std::false_type;
 
-    // This evaluates if T::device_compatible is defined using the overloads above
+    //! This evaluates if T::device_compatible is defined using the overloads above
     template <typename T>
     using device_compatible_defined_test = decltype( device_compatible_defined_overload<T>(0) );
 
-    // This overload of from_device_defined_overload is selected if T::device_compatible exists
+    //! This overload of from_device_defined_overload is selected if T::device_compatible exists
     template <typename KernelT, typename... Args>
     constexpr auto kernel_args_overload(int) -> decltype( std::declval<KernelT>().kernel(std::declval<Args>()...), std::true_type{} );
 
-    // This overload is selected if the above overload fails (T.from_device() expression is invalid)
+    //! This overload is selected if the above overload fails (T.from_device() expression is invalid)
     template <typename, typename... Args>
     constexpr auto kernel_args_overload(long) -> std::false_type;
 
-    // this evaluates if a kernel has a kernel() call that takes Arguments...
+    //! this evaluates if a kernel has a kernel() call that takes Arguments...
     template<typename KernelT, typename... Arguments>
     using kernel_args_test = decltype( kernel_args_overload<KernelT, Arguments...>(0));
 
@@ -366,12 +369,23 @@ struct class_interface {
 // going to roll with this for now.
 // @TODO(jspisak): revisit this
 #ifndef JUMP_ENABLE_CUDA
+    //! Dummy type for cudaError_t for compatibility when not JUMP_ENABLE_CUDA
     using cudaError_t = unsigned int;
     
+    /**
+     * @brief dummy definition of cudaGetErrorName allows
+     *  cuda_error_exception to compile even if not JUMP_ENABLE CUDA
+     * @return dummy text saying we didn't compile with cuda
+     */
     const char* cudaGetErrorName(const cudaError_t&) {
         return "NOT COMPILED WITH CUDA";
     }
 
+    /**
+     * @brief dummy definition of cudaGetErrorString allows
+     *  cuda_error_exception to compile even if not JUMP_ENABLE CUDA
+     * @return dummy text saying we didn't compile with cuda
+     */
     const char* cudaGetErrorString(const cudaError_t&) {
         return "NOT COMPILED WITH CUDA";
     }
@@ -383,6 +397,11 @@ struct class_interface {
  */
 class cuda_error_exception : public std::exception {
 public:
+    /**
+     * @brief construct a cuda_error_exception
+     * @param cuda_error the cuda error this exception is from
+     * @param msg any additional message
+     */
     cuda_error_exception(
         const cudaError_t& cuda_error,
         const std::string& msg = ""
@@ -395,11 +414,17 @@ public:
             message_ += ": " + msg;
     }
 
+    /**
+     * @brief gets the message for this exception
+     * @return message of what the error is about
+     */
     const char* what() const noexcept {
         return message_.c_str();
     }
     
+    //! The underlying cuda error
     cudaError_t cuda_error_;
+    //! The message
     std::string message_;
 
 }; /* class cuda_error_exception */
@@ -410,14 +435,23 @@ public:
  */
 class no_cuda_exception : public std::exception {
 public:
+    /**
+     * @brief construct a no_cuda_exception
+     * @param msg any additional message
+     */
     no_cuda_exception(const std::string& msg = ""):
         message_("CUDA is not available: " + msg)
     {}
 
+    /**
+     * @brief gets the message for this exception
+     * @return message of what the error is about
+     */
     const char* what() const noexcept {
         return message_.c_str();
     }
 
+    //! The message
     std::string message_;
 
 }; /* class no_cuda_exception */
@@ -428,14 +462,23 @@ public:
  */
 class no_devices_exception : public std::exception {
 public:
+    /**
+     * @brief construct a no_devices_exception
+     * @param msg any additional message
+     */
     no_devices_exception(const std::string& msg = ""):
         message_("No devices available: " + msg)
     {}
 
+    /**
+     * @brief gets the message for this exception
+     * @return message of what the error is about
+     */
     const char* what() const noexcept {
         return message_.c_str();
     }
 
+    //! The message
     std::string message_;
 
 }; /* class no_devices_exception */
@@ -446,14 +489,23 @@ public:
  */
 class device_incompatible_exception : public std::exception {
 public:
+    /**
+     * @brief construct a device_incompatible_exception
+     * @param msg any additional message
+     */
     device_incompatible_exception(const std::string& msg = ""):
         message_("No devices available: " + msg)
     {}
 
+    /**
+     * @brief gets the message for this exception
+     * @return message of what the error is about
+     */
     const char* what() const noexcept {
         return message_.c_str();
     }
 
+    //! The message
     std::string message_;
 
 }; /* class device_incompatible_exception */

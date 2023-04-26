@@ -1,3 +1,10 @@
+/**
+ * @file threadpool.hpp
+ * @author Joshua Spisak (jspisak@andrew.cmu.edu)
+ * @brief Defined a threadpool that can parallelize an executor across some number of threads.
+ * @version 0.1
+ * @date 2023-04-26
+ */
 #ifndef JUMP_THREADPOOL_HPP_
 #define JUMP_THREADPOOL_HPP_
 
@@ -33,13 +40,13 @@ namespace _threadpool_executor_interface_helpers {
     template <typename ExecutorT, typename ContextT>
     using executor_has_control_test = decltype( executor_has_control<ExecutorT, ContextT>(0) );
 
-    // Used to test for executor.execute(context) (positive overload)
+    //! Used to test for executor.execute(context) (positive overload)
     template <typename ExecutorT, typename ContextT>
     constexpr auto executor_has_execute(int) -> decltype( std::declval<ExecutorT>().execute(std::declval<ContextT&>()), std::true_type{} );
-    // Used to test for executor.execute(context) (negative overload)
+    //! Used to test for executor.execute(context) (negative overload)
     template <typename,typename>
     constexpr auto executor_has_execute(long) -> std::false_type;
-    // Used to test for executor.execute(context)
+    //! Used to test for executor.execute(context)
     template <typename ExecutorT, typename ContextT>
     using executor_has_execute_test = decltype( executor_has_execute<ExecutorT, ContextT>(0) );
 
@@ -137,6 +144,12 @@ public:
             control_thread_.join();
     }
 
+    /**
+     * @brief thread that actual runs control for the threadpool
+     * @tparam executor_t the type of executor we are parallelizing
+     * @param executor the executor to parallelize
+     * @param num_threads the number of threads to parallelize over
+     */
     template<typename executor_t>
     void controlThread(const executor_t& executor, std::size_t num_threads) {
         // if control(context) is defined we do flow control and dynamically create new threads
@@ -212,6 +225,13 @@ public:
         executing_ = false;
     }
 
+    /**
+     * @brief the function that is used for a thread to actually
+     *  perform work with an executor
+     * @tparam executor_t the type of executor to parallelize over
+     * @param executor the executor to actually parallelize
+     * @param thread_uid the uid of this thread (used to coordinate thread lifetime)
+     */
     template<typename executor_t>
     void executorThread(const executor_t& executor, std::size_t thread_uid) {
         // I handle some aspects of a threads lifetime (interacting with the control thread)
@@ -222,27 +242,44 @@ public:
         dead_threads_.push_back(thread_uid);
     }
 
-    // trigger a shutdown of threads
+    /**
+     * @brief trigger a shutdown of the threadpool (non-blocking)
+     */
     void shutdown() {
         context_.shutdown();
     }
 
-    // properly stop all threads
-    void stop() {
-        shutdown();
-        if(control_thread_.joinable())
-            control_thread_.join();
-    }
-
+    /**
+     * @brief waits for the threadpool to stop execution (blocking)
+     * @note does not trigger the threadpool to stop!
+     */
     void wait() {
         if(control_thread_.joinable())
             control_thread_.join();
     }
 
+    /**
+     * @brief properly stop the threadpool (blocking until all execution is done)
+     * @note calls shutdown() then wait() lol
+     */
+    void stop() {
+        shutdown();
+        wait();
+    }
+
+    /**
+     * @brief allows access to the threadpool context
+     * @return the context by reference
+     */
     context& get_context() {
         return context_;
     }
 
+
+    /**
+     * @brief allows access to the threadpool context
+     * @return the context by const reference
+     */
     const context& get_context() const {
         return context_;
     }

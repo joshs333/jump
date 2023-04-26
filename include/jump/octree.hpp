@@ -1,3 +1,4 @@
+////// TODO(jspisak): make this... interopable octree
 #ifndef JUMP_OCTREE_HPP_
 #define JUMP_OCTREE_HPP_
 
@@ -29,16 +30,19 @@ class OctreeSphere {
 // template<typename InsertionT>
 // using octree_is_spatial_type = (std::is_same<InsertionT, OctreeCube> || std::is_same<InsertionT, OctreeSphere>);
 
+//! A leaf in an octree
 template<typename ContainedT>
 class OctreeLeaf {
 
 };
 
+//! A node within the octree (forms branches)
 template<typename ContainedT>
 class OctreeNode {
 
 };
 
+//! The root to access / modify the octree
 template<typename ContainedT = int, typename InsertionT = Eigen::Matrix<double, 3, 1>>
 class Octree {
 

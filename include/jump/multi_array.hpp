@@ -1,3 +1,10 @@
+/**
+ * @file multi_array.hpp
+ * @author Joshua Spisak (jspisak@andrew.cmu.edu)
+ * @brief A multi-dimensional array over some memory buffer.
+ * @version 0.1
+ * @date 2023-04-25
+ */
 #ifndef JUMP_MULTI_ARRAY_HPP_
 #define JUMP_MULTI_ARRAY_HPP_
 
@@ -6,6 +13,7 @@
 
 namespace jump {
 
+//! helpers for the multi_array
 namespace multi_array_helpers {
 
 //! Evaluate if a type can be cast to std::size_t (false evaluator)
@@ -28,13 +36,24 @@ constexpr bool can_be_size_t() {
 
 } /* namespace multi_array_helpers */
 
-
+/**
+ * @brief could be used to note which axes to loop over
+ *  for foreach calls.
+ * @tparam _max_dims the maximum number of dimensions to support
+ */
 template<std::size_t _max_dims = 4>
 struct axes {
+    /**
+     * @brief get the max dims for these axes
+     * @return constexpr std::size_t the max dims
+     */
     constexpr std::size_t max_dims() const {
         return _max_dims;
     }
 
+    /**
+     * @brief construct axes (all true)
+     */
     JUMP_INTEROPABLE
     axes() {
         for(std::size_t i = 0; i < _max_dims; ++i) {
@@ -42,6 +61,10 @@ struct axes {
         }
     }
 
+    /**
+     * @brief construct axes with some subset of the axes
+     * @param axes_to_mark a list of the axes to mark
+     */
     JUMP_INTEROPABLE
     axes(const std::initializer_list<int>& axes_to_mark) {
         for(std::size_t i = 0; i < _max_dims; ++i) {
@@ -56,8 +79,8 @@ struct axes {
     /**
      * @brief construct axes with specific axes values
      * @tparam IndexT the type used for an specific dimension
-     * @param val force there to be at least one std::size_t value to use this constructor
-     * @param vals index values
+     * @param dim force there to be at least one std::size_t value to use this constructor
+     * @param dims dims to select
      * @note makes sure that the number of arguments is not greater than _max_dims
      */
     template<typename... DimT>
@@ -123,6 +146,7 @@ struct axes {
         return axes_[dim];
     }
 
+    //! The actual data of what axes are selected
     bool axes_[_max_dims];
 
 }; /* struct axes */
@@ -133,6 +157,10 @@ struct axes {
  */
 template<std::size_t _max_dims = 4>
 struct multi_indices {
+    /**
+     * @brief construct indices with some number of dimensions all set to zero
+     * @param size the number of dimensions
+     */
     JUMP_INTEROPABLE
     static multi_indices zero(const std::size_t& size = _max_dims) {
         multi_indices result;
@@ -193,6 +221,7 @@ struct multi_indices {
     /**
      * @brief construct multi_indices from an array of size values
      * @param sizes the size values to construct from
+     * @param dim_count the number of dimensions of these indices (default = _max_dims)
      */
     JUMP_INTEROPABLE
     multi_indices(const std::size_t* sizes, const std::size_t& dim_count = _max_dims) {
@@ -232,16 +261,30 @@ struct multi_indices {
         return multi_indices_[dim];
     }
 
+    /**
+     * @brief get the dimension count (const ref)
+     * @return the number of dimensions
+     */
     JUMP_INTEROPABLE
     const std::size_t& dims() const {
         return dim_count_;
     }
 
+    /**
+     * @brief get the dimension count (const ref)
+     * @return the number of dimensions
+     */
     JUMP_INTEROPABLE
     std::size_t& dims() {
         return dim_count_;
     }
 
+    /**
+     * @brief gets the `volume` of a hyper-rectangle with dimensions / size of these indices
+     * @return the offset i guess...
+     * @todo rename maybe? lol this name sense to me
+     *  5 hours ago but for some reason no longer does
+     */
     JUMP_INTEROPABLE
     std::size_t offset() const {
         std::size_t result = 1;
@@ -251,6 +294,10 @@ struct multi_indices {
         return result;
     }
 
+    /**
+     * @brief pre-fix incrementer
+     * @return this object
+     */
     JUMP_INTEROPABLE
     multi_indices& operator++() {
         if(dim_count_ == 0) return *this;
@@ -266,6 +313,12 @@ struct multi_indices {
         return *this;
     }
 
+    /**
+     * @brief modulo by another indices, useful indices
+     *  perforing a modulo over indices representing the size of a multi-array
+     * @param other the indices to modulo against
+     * @return modulo'd indices
+     */
     JUMP_INTEROPABLE
     multi_indices operator%(const multi_indices& other) {
         auto result = *this;
@@ -273,6 +326,12 @@ struct multi_indices {
         return result;
     }
 
+    /**
+     * @brief modulo by another indices, useful indices
+     *  perforing a modulo over indices representing the size of a multi-array
+     * @param other the indices to modulo against
+     * @return this class modulo'd
+     */
     JUMP_INTEROPABLE
     multi_indices& operator%=(const multi_indices& other) {
         if(dim_count_ == 0) return *this;
@@ -287,6 +346,11 @@ struct multi_indices {
         return *this;
     }
 
+    /**
+     * @brief equal comparison against another indices
+     * @param other the indices to compare against
+     * @return this == other
+     */
     JUMP_INTEROPABLE
     bool operator==(const multi_indices& other) {
         if(other.dim_count_ != dim_count_)
@@ -298,6 +362,11 @@ struct multi_indices {
         return true;
     }
 
+    /**
+     * @brief less-than comparison against another indices
+     * @param other the indices to compare against
+     * @return this < other
+     */
     JUMP_INTEROPABLE
     bool operator<(const multi_indices& other) {
         for(std::size_t i = 0; i < dim_count_ && i < other.dim_count_; ++i) {
@@ -313,6 +382,11 @@ struct multi_indices {
         return false;
     }
 
+    /**
+     * @brief less-than or equal comparison against another indices
+     * @param other the indices to compare against
+     * @return this <= other
+     */
     JUMP_INTEROPABLE
     bool operator<=(const multi_indices& other) {
         for(std::size_t i = 0; i < dim_count_ && i < other.dim_count_; ++i) {
@@ -324,6 +398,11 @@ struct multi_indices {
         return true;
     }
 
+    /**
+     * @brief greater-than comparison against another indices
+     * @param other the indices to compare against
+     * @return this > other
+     */
     JUMP_INTEROPABLE
     bool operator>(const multi_indices& other) {
         for(std::size_t i = 0; i < dim_count_ && i < other.dim_count_; ++i) {
@@ -337,6 +416,11 @@ struct multi_indices {
         return false;
     }
 
+    /**
+     * @brief greater-than or equal comparison against another indices
+     * @param other the indices to compare against
+     * @return this >= other
+     */
     JUMP_INTEROPABLE
     bool operator>=(const multi_indices& other) {
         for(std::size_t i = 0; i < dim_count_ && i < other.dim_count_; ++i) {
@@ -346,6 +430,11 @@ struct multi_indices {
         return true;
     }
 
+    /**
+     * @brief not-equal comparison against another indices
+     * @param other the indices to compare against
+     * @return this != other
+     */
     JUMP_INTEROPABLE
     bool operator!=(const multi_indices& other) {
         return !(*this == other);
@@ -370,6 +459,7 @@ using indices = multi_indices<>;
 template<typename T, std::size_t _max_dims = 4>
 class multi_array {
 public:
+    //! Convenient type, indicies with the same _max_dims as this multi_array
     using indices = multi_indices<_max_dims>;
 
     /**

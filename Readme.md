@@ -24,11 +24,12 @@ octree
 - container based (ray trace to first intersection, all intersections)
 
 ## Open Questions / To-Do's
-- should I have made the kernels / executors const to be passed to the iterate / foreach calls
+- should I have made the kernels / executors const to be passed to the iterate / foreach calls (same for threadpool executor interfaces)
 - how to handle different (max) dimension indices / multi_arrays
 - indices operators (and handling the difference between representing size vs an index)
 - make foreach / iterate callable from device??
 - make cuda calls for multi_array use 3d blocks or whatevs? (easy to hit limit with three dimensional array)
+- flesh out unit tests for parallel, threadpool, new multi_array features with the indices
 
 # Foreach kernels
 struct k {

@@ -47,6 +47,7 @@ enum class memory_t {
  */
 class memory_buffer {
 public:
+    //! Type for a custom reallocation function that can be called on realloc()
     using custom_realloc_func = std::function<void(void*,void*,std::size_t)>;
 
     //! The type used to count references
