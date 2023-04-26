@@ -168,18 +168,25 @@ struct multi_indices {
     template<typename... IndexT>
     JUMP_INTEROPABLE
     multi_indices(const std::size_t& val, const IndexT&... vals) {
-        static_assert(multi_array_helpers::can_be_size_t<IndexT...>(), "all IndexT must be castable to std::size_t");
         static_assert(sizeof...(IndexT) + 1 <= _max_dims, "Number of indexes must be less than _max_dims");
         // wrapping the rest in this constexpr cleans up the error output if the static_assert fails :)
-        if constexpr(multi_array_helpers::can_be_size_t<IndexT...>()) {
-            dim_count_ = sizeof...(IndexT) + 1;
+        if constexpr(sizeof...(IndexT) == 0) {
+            dim_count_ = 1;
             multi_indices_[0] = val;
-            std::size_t dim = 1;
-            for(const auto p : {vals...}) {
-                multi_indices_[dim++] = static_cast<std::size_t>(p);
-            }
-            for(std::size_t i = dim; i < _max_dims; ++i)
+            for(std::size_t i = 1; i < _max_dims; ++i)
                 multi_indices_[i] = 0;
+        } else {
+            static_assert(multi_array_helpers::can_be_size_t<IndexT...>(), "all IndexT must be castable to std::size_t");
+            if constexpr(multi_array_helpers::can_be_size_t<IndexT...>()) {
+                dim_count_ = sizeof...(IndexT) + 1;
+                multi_indices_[0] = val;
+                std::size_t dim = 1;
+                for(const auto p : {vals...}) {
+                    multi_indices_[dim++] = static_cast<std::size_t>(p);
+                }
+                for(std::size_t i = dim; i < _max_dims; ++i)
+                    multi_indices_[i] = 0;
+            }
         }
     }
 

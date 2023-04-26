@@ -200,7 +200,6 @@ struct multi_array_foreach {
                 }
             }
         }
-
     }
 
     //! const reference to the kernel (by pointer)
@@ -399,9 +398,18 @@ void multi_array_foreach(
     }
 }
 
+/**
+ * @brief iterate a kernel over a range
+ * @tparam kernel_t the kernel to use
+ * @param kernel the kernel encoding the function to parallelize over
+ * @param range the range to iterate over
+ */
 template<typename kernel_t>
 __global__
-void iteration(kernel_t kernel, indices range) {
+void iteration(
+    kernel_t kernel,
+    indices range
+) {
     constexpr bool has_i_kernel = kernel_interface<kernel_t >::template has_kernel<const std::size_t&>();
     constexpr bool has_i_i_kernel = kernel_interface<kernel_t >::template has_kernel<const std::size_t&, const std::size_t&>();
     constexpr bool has_i_i_i_kernel = kernel_interface<kernel_t >::template has_kernel<const std::size_t&, const std::size_t&, const std::size_t&>();
@@ -447,13 +455,13 @@ void iteration(kernel_t kernel, indices range) {
  * @tparam kernel_t the kernel that defines the parallelized function
  * @tparam array_t the type in the array we are parallelizing over
  * @param array the array holding data we are executing soemthing foreach
- * @param k the kernel defining the parallelized function
+ * @param kernel the kernel defining the parallelized function
  * @param options options for execution
  */
 template<typename kernel_t, typename array_t>
 void foreach(
     jump::array<array_t>& array,
-    kernel_t kernel,
+    const kernel_t& kernel,
     const par& options = par()
 ) {
     constexpr bool has_index_val_kernel = kernel_interface<kernel_t >::template has_kernel<const std::size_t&, array_t&>();
@@ -512,13 +520,13 @@ void foreach(
  * @tparam kernel_t the kernel that defines the parallelized function
  * @tparam array_t the type in the multi_array we are parallelizing over
  * @param array the multi_array holding data we are executing soemthing foreach
- * @param k the kernel defining the parallelized function
+ * @param kernel the kernel defining the parallelized function
  * @param options options for execution
  */
 template<typename kernel_t, typename array_t>
 void foreach(
     jump::multi_array<array_t>& array,
-    kernel_t kernel,
+    const kernel_t& kernel,
     const par& options = par()
 ) {
     constexpr bool has_i_v_kernel = kernel_interface<kernel_t >::template has_kernel<const std::size_t&, array_t&>();
@@ -615,8 +623,19 @@ void foreach(
     }
 }
 
+/**
+ * @brief parallelizes a call to iterate over a range
+ * @tparam kernel_t the struct encoding kernel functions to use
+ * @param range the range to iterate over
+ * @param kernel the kernel to use
+ * @param options the options to use for parallelizing
+ */
 template<typename kernel_t>
-void iterate(const indices& range, const kernel_t& kernel, const par& options = par()) {
+void iterate(
+    const indices& range,
+    const kernel_t& kernel,
+    const par& options = par()
+) {
     constexpr bool has_i_kernel = kernel_interface<kernel_t >::template has_kernel<const std::size_t&>();
     constexpr bool has_i_i_kernel = kernel_interface<kernel_t >::template has_kernel<const std::size_t&, const std::size_t&>();
     constexpr bool has_i_i_i_kernel = kernel_interface<kernel_t >::template has_kernel<const std::size_t&, const std::size_t&, const std::size_t&>();
@@ -696,39 +715,59 @@ void iterate(const indices& range, const kernel_t& kernel, const par& options = 
     }
 }
 
+/**
+ * @brief parallelizes a call to iterate over a 1d range
+ * @tparam kernel_t the struct encoding kernel functions to use
+ * @param r1 the size of the range to iterate over
+ * @param kernel the kernel to use
+ * @param options the options to use for parallelizing
+ */
 template<typename kernel_t>
-void iterate(const std::size_t& count, const kernel_t& k, const par& options = par()) {
-    constexpr bool has_i_kernel = kernel_interface<kernel_t >::template has_kernel<const std::size_t&>();
-    constexpr bool has_s_kernel = kernel_interface<kernel_t >::template has_kernel<const jump::indices&>();
-    constexpr bool has_kernel_defined = has_i_kernel || has_s_kernel;
-    static_assert(has_kernel_defined, "kernel_t does not have any proper kernel functions defined.");
-
-    if constexpr(has_kernel_defined) {
-        if(options.target == par::seq) {
-            for(std::size_t i = 0; i < count; ++i) {
-                if constexpr(has_i_kernel) {
-                    k.kernel(i);
-                } else {
-                    k.kernel(jump::indices(i));
-                }
-            }
-        } else if(options.target == par::threadpool) {
-
-        }
-    }
+void iterate(
+    const std::size_t& r1,
+    const kernel_t& kernel,
+    const par& options = par()
+) {
+    iterate(indices(r1), kernel, options);
 }
 
+/**
+ * @brief parallelizes a call to iterate over a 1d range
+ * @tparam kernel_t the struct encoding kernel functions to use
+ * @param r1 the size of the range to iterate over (dim 1)
+ * @param r2 the size of the range to iterate over (dim 2)
+ * @param kernel the kernel to use
+ * @param options the options to use for parallelizing
+ */
 template<typename kernel_t>
-void iterate(const std::size_t& c1, const std::size_t& c2, const kernel_t& k) {
-    static_assert(kernel_interface<kernel_t>::has_index_index_kernel(), "kernel_t must have kernel(std::size_t, std::size_t) defined");
+void iterate(
+    const std::size_t& r1,
+    const std::size_t& r2,
+    const kernel_t& kernel, 
+    const par& options = par()
+) {
+    iterate(indices(r1, r2), kernel, options);
+}
 
-    if constexpr(kernel_interface<kernel_t>::has_index_index_kernel()) {
-        for(std::size_t i = 0; i < c1; ++i) {
-            for(std::size_t j = 0; j < c2; ++j){
-                k.kernel(i, j);
-            }
-        }
-    }
+
+/**
+ * @brief parallelizes a call to iterate over a 1d range
+ * @tparam kernel_t the struct encoding kernel functions to use
+ * @param r1 the size of the range to iterate over (dim 1)
+ * @param r2 the size of the range to iterate over (dim 2)
+ * @param r3 the size of the range to iterate over (dim 3)
+ * @param kernel the kernel to use
+ * @param options the options to use for parallelizing
+ */
+template<typename kernel_t>
+void iterate(
+    const std::size_t& r1,
+    const std::size_t& r2,
+    const std::size_t& r3,
+    const kernel_t& kernel,
+    const par& options = par()
+) {
+    iterate(indices(r1, r2, r3), kernel, options);
 }
 
 } /* namepace jump*/

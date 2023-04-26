@@ -4,26 +4,6 @@
 // STD
 #include <cstdio>
 
-__device__
-void dosleep() {
-    clock_t start_clock = clock();
-    clock_t clock_offset = 0;
-    while (clock_offset < 10000000)
-    {
-        clock_offset = clock() - start_clock;
-    }
-}
-
-__device__
-void do_if_sleep(std::size_t index) {
-    if(index % 3 == 0) {
-        dosleep();
-    } else if(index % 3 == 1) {
-        dosleep();
-    } else {
-        dosleep();
-    }
-}
 
 struct multiplier_kernel {
     static const bool device_compatible = true;
@@ -37,33 +17,6 @@ struct multiplier_kernel {
     JUMP_INTEROPABLE
     void kernel(const std::size_t& index, int& i) const {
         i = index * index;
-        // #if JUMP_ON_DEVICE
-        //     // std::printf("On device\n");
-
-        //     if(index % 3 == 0) {
-        //         dosleep();
-        //     } else if(index % 3 == 1) {
-        //         dosleep();
-        //     } else {
-        //         dosleep();
-        //     }
-        //     // jump::device_thread_sync();
-        //     if(index % 3 == 0) {
-        //         dosleep();
-        //     } else if(index % 3 == 1) {
-        //         dosleep();
-        //     } else {
-        //         dosleep();
-        //     }
-        //     jump::device_thread_sync();
-        //     do_if_sleep(index);
-        //     jump::device_thread_sync();
-        //     do_if_sleep(index);
-        //     jump::device_thread_sync();
-        //     do_if_sleep(index);
-        // #else
-        //     std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        // #endif
         std::printf("Functor.. %lu %d\n", index, i);
     }
 }; /* struct multiplier_kernel */
@@ -192,7 +145,9 @@ void iterate_testing() {
     jump::iterate(jump::indices(3, 3), iterate_indice_kernel(), {.target = jump::par::seq});
     jump::iterate(jump::indices(3, 3), iterate_2d_kernel(), {.target = jump::par::threadpool});
     jump::iterate(jump::indices(3, 3), iterate_indice_kernel(), {.target = jump::par::cuda});
-    // jump::iterate(10, iterate_1d_kernel(), {.target = jump::par::threadpool});
+    jump::iterate(3, iterate_indice_kernel(), {.target = jump::par::threadpool});
+    jump::iterate(3, 3, iterate_indice_kernel(), {.target = jump::par::threadpool});
+    jump::iterate(3, 3, 3, iterate_indice_kernel(), {.target = jump::par::threadpool});
 }
 
 
