@@ -28,7 +28,7 @@ struct par {
 
     //! If target == par::cuda, the number of threads per block in the cuda call
     //! TODO(jspisak): dynamically compute this better?
-    std::size_t threads_per_block = 512;
+    std::size_t threads_per_block = 256;
     // TODO(jspisak): device number (for cuda)
 
 }; /* struct par */
@@ -697,7 +697,9 @@ void iterate(
                     // Call TODO(jspisak): ensure that this method of handling blocks / threads doesn't limit size
                     auto num_blocks = (int) std::ceil(range.offset() / static_cast<float>(options.threads_per_block));
                     parallel_cuda_kernels::iteration<<<num_blocks, options.threads_per_block>>>(kernel, range);
-                    cudaDeviceSynchronize();
+                    auto error = cudaDeviceSynchronize();
+                    if(error != cudaSuccess)
+                        throw jump::cuda_error_exception(error);
 
                     // Cleanup!
                     if constexpr(kernel_interface<kernel_t>::from_device_defined()) {

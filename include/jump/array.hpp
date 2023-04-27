@@ -207,9 +207,11 @@ public:
      * @return the array member by reference
      */
     JUMP_INTEROPABLE
-    T& at(const std::size_t& index) {
+    inline T& at(const std::size_t& index) {
         #if JUMP_ON_DEVICE
-            assert(index < size() && "jump::array index must be less than size");
+            #if JUMP_ASSERT_SIZE_ON_DEVICE
+                assert(index < size() && "jump::array index must be less than size");
+            #endif
         #else
             if(index >= size()) {
                 throw std::out_of_range("jump::array index " + std::to_string(index) + " >= " + std::to_string(size()) );
@@ -224,9 +226,11 @@ public:
      * @return the array member by const reference
      */
     JUMP_INTEROPABLE
-    T& at(const std::size_t& index) const {
+    inline T& at(const std::size_t& index) const {
         #if JUMP_ON_DEVICE
-            assert(index < size() && "jump::array index must be less than size");
+            #if JUMP_ASSERT_SIZE_ON_DEVICE
+                assert(index < size() && "jump::array index must be less than size");
+            #endif
         #else
             if(index >= size()) {
                 throw std::out_of_range("jump::array index " + std::to_string(index) + " >= " + std::to_string(size()) );
@@ -292,6 +296,7 @@ public:
      * @brief provide direct access to the underlying memory buffer
      * @return memory_buffer& the memory buffer containing array data
      */
+    JUMP_INTEROPABLE
     memory_buffer& buffer() {
         return buffer_;
     }
@@ -300,6 +305,7 @@ public:
      * @brief provide direct access to the underlying memory buffer
      * @return const memory_buffer& the memory buffer containing array data
      */
+    JUMP_INTEROPABLE
     const memory_buffer& buffer() const {
         return buffer_;
     }

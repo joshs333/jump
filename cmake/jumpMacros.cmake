@@ -52,7 +52,7 @@ function(jump_cuda_target target_name)
     target_link_libraries(${target_name} PUBLIC jump ${CUDA_LIBRARIES})
     target_include_directories(${target_name} PRIVATE ${CUDA_INCLUDE_DIRS})
 
-    set(NVCC_ARGS ${NVCC_ARGS} --expt-relaxed-constexpr -Xcudafe "--diag_suppress=20012 --display_error_number")
+    set(NVCC_ARGS ${NVCC_ARGS} --expt-relaxed-constexpr  -Xptxas -v -Xcudafe "--diag_suppress=20012 --display_error_number")
     target_compile_options(${target_name} PUBLIC $<$<COMPILE_LANGUAGE:CUDA>:${NVCC_ARGS}>)
 endfunction()
 
