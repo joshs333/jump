@@ -53,22 +53,20 @@ include(CMakePackageConfigHelpers)
 #####################################################################
 ####################### Documentation Building ######################
 #####################################################################
-
 if(${JUMP_BUILD_DOCS})
     # Thanks to https://vicrucann.github.io/tutorials/quick-cmake-doxygen/
     find_package(Doxygen)
 
     if(DOXYGEN_FOUND)
-        add_custom_target(docs ALL
+        add_custom_target(jump_docs ALL
             COMMAND ${DOXYGEN_EXECUTABLE} ${PROJECT_SOURCE_DIR}/.doxygen
             WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
-            COMMENT "Generating API Documentation with Doxygen"
+            COMMENT "Generating JUMP API Documentation with Doxygen"
             VERBATIM
         )
     else()
         message(SEND_ERROR "Doxygen must be installed to generate doxygen documentation")
     endif()
-
 endif()
 
 #####################################################################
@@ -86,10 +84,8 @@ target_include_directories(${PROJECT_NAME} INTERFACE
 target_link_libraries(${PROJECT_NAME} INTERFACE Eigen3::Eigen)
 
 #####################################################################
-####################### Target Macros (to be moved later) ###########
+####################### Test Target macros ##########################
 #####################################################################
-
-
 # Mark an executable as a test (link gtest / deps & call gtest_discover_tests on it)
 function(jump_test target_name)
     message(STATUS "[JUMP][${target_name}] adding test")
