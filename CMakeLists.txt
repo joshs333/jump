@@ -76,22 +76,12 @@ find_package(Eigen3 REQUIRED)
 
 add_library(${PROJECT_NAME} INTERFACE)
 # We do this instead of compile_features() becase cxx_std_17 feature is not happy with CUDA
-target_compile_options(${PROJECT_NAME} INTERFACE -std=c++17)
+target_compile_options(${PROJECT_NAME} INTERFACE -std=c++17 -O3 -g)
 target_include_directories(${PROJECT_NAME} INTERFACE
     $<BUILD_INTERFACE:${${PROJECT_NAME}_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/${PROJECT_NAME}>
 )
 target_link_libraries(${PROJECT_NAME} INTERFACE Eigen3::Eigen)
-
-#####################################################################
-####################### Test Target macros ##########################
-#####################################################################
-# Mark an executable as a test (link gtest / deps & call gtest_discover_tests on it)
-function(jump_test target_name)
-    message(STATUS "[JUMP][${target_name}] adding test")
-    target_link_libraries(${target_name} PUBLIC gtest gtest_main pthread jump)
-    gtest_discover_tests(${target_name})
-endfunction()
 
 #####################################################################
 ####################### Executables #################################
@@ -111,6 +101,20 @@ if(${JUMP_BUILD_EXAMPLES})
         jump_cuda_executable(jump_threadpool_example src/examples/threadpool.cpp)
     endif()
 endif()
+
+#####################################################################
+####################### Test Target macros ##########################
+#####################################################################
+# Mark an executable as a test (link gtest / deps & call gtest_discover_tests on it)
+function(jump_test target_name)
+    message(STATUS "[JUMP][${target_name}] adding test")
+    target_link_libraries(${target_name} PUBLIC gtest gtest_main pthread jump gcov)
+    gtest_discover_tests(${target_name})
+
+    # set(NVCC_ARGS ${NVCC_ARGS} --compiler-options "--coverage -O0 -fno-elide-constructors" -O0 --coverage -fno-elide-constructors)
+    # target_compile_options(${target_name} PUBLIC $<$<COMPILE_LANGUAGE:CUDA>:${NVCC_ARGS}>)
+    target_compile_options(${target_name} PUBLIC -O0 --coverage -fno-elide-constructors)
+endfunction()
 
 #####################################################################
 ####################### Tests #######################################
@@ -139,6 +143,20 @@ if(${JUMP_BUILD_TESTS})
 
     add_executable(jump_shared_ptr_test_no_cuda src/tests/shared_ptr.cpp)
     jump_test(jump_shared_ptr_test_no_cuda)
+
+    add_custom_target(jump_lcov
+        COMMAND lcov --no-external --directory . --capture --output-file build/coverage.info
+        WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+        COMMENT "Generating lcov report for JUMP"
+        VERBATIM
+    )
+    add_custom_target(jump_coverage
+        COMMAND genhtml --demangle-cpp --ignore-errors source --legend -o build/coverage build/coverage.info --prefix ${PROJECT_SOURCE_DIR}
+        WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+        COMMENT "Generating html report for JUMP"
+        DEPENDS jump_lcov
+        VERBATIM
+    )
 endif()
 
 #####################################################################

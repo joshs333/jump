@@ -11,6 +11,9 @@
 // JUMP
 #include <jump/memory_buffer.hpp>
 
+// STD
+#include <limits>
+
 namespace jump {
 
 //! helpers for the multi_array
