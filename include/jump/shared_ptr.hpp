@@ -2,7 +2,6 @@
  * @file shared_ptr.hpp
  * @author Joshua Spisak (jspisak@andrew.cmu.edu)
  * @brief Shared ptr that can be used iteropably between cpu and gpu code.
- * @version 0.1
  * @date 2023-04-26
  */
 #ifndef JUMP_SHARED_PTR_HPP_

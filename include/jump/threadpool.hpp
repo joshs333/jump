@@ -2,7 +2,6 @@
  * @file threadpool.hpp
  * @author Joshua Spisak (jspisak@andrew.cmu.edu)
  * @brief Defined a threadpool that can parallelize an executor across some number of threads.
- * @version 0.1
  * @date 2023-04-26
  */
 #ifndef JUMP_THREADPOOL_HPP_

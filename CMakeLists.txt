@@ -99,6 +99,7 @@ if(${JUMP_BUILD_EXAMPLES})
         jump_cuda_executable(jump_parallel_example src/examples/parallel.cpp)
         jump_cuda_executable(jump_octree_example src/examples/octree.cpp)
         jump_cuda_executable(jump_threadpool_example src/examples/threadpool.cpp)
+        jump_cuda_executable(jump_random_example src/examples/random.cpp)
     endif()
 endif()
 
@@ -109,11 +110,8 @@ endif()
 function(jump_test target_name)
     message(STATUS "[JUMP][${target_name}] adding test")
     target_link_libraries(${target_name} PUBLIC gtest gtest_main pthread jump gcov)
-    gtest_discover_tests(${target_name})
-
-    # set(NVCC_ARGS ${NVCC_ARGS} --compiler-options "--coverage -O0 -fno-elide-constructors" -O0 --coverage -fno-elide-constructors)
-    # target_compile_options(${target_name} PUBLIC $<$<COMPILE_LANGUAGE:CUDA>:${NVCC_ARGS}>)
     target_compile_options(${target_name} PUBLIC -O0 --coverage -fno-elide-constructors)
+    gtest_discover_tests(${target_name})
 endfunction()
 
 #####################################################################

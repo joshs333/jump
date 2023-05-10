@@ -2,7 +2,6 @@
  * @file multi_array.hpp
  * @author Joshua Spisak (jspisak@andrew.cmu.edu)
  * @brief A multi-dimensional array over some memory buffer.
- * @version 0.1
  * @date 2023-04-25
  */
 #ifndef JUMP_MULTI_ARRAY_HPP_
@@ -464,6 +463,11 @@ class multi_array {
 public:
     //! Convenient type, indicies with the same _max_dims as this multi_array
     using indices = multi_indices<_max_dims>;
+
+    multi_array():
+        size_(indices::zero(_max_dims))
+    {
+    }
 
     /**
      * @brief construct a new multi_array with the default initializer 

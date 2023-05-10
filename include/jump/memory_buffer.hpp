@@ -3,9 +3,7 @@
  * @author Joshua Spisak (jspisak@andrew.cmu.edu)
  * @brief object containing a raw buffer of memory and controlling it's
  *  location in either host or device memory.
- * @version 0.1
  * @date 2022-10-05
- * @copyright Copyright (c) 2022 Joshua Spisak
  */
 #ifndef JUMP_MEMORY_BUFFER_HPP_
 #define JUMP_MEMORY_BUFFER_HPP_
