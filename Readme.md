@@ -19,7 +19,7 @@ Unless an explicit copy call is executed, the buffer is shared between all array
 
 An array by default will create a new memory buffer, unless it is constructed with a passed in memory buffer.
 
-octree 
+octree
 - point based
 - container based (ray trace to first intersection, all intersections)
 

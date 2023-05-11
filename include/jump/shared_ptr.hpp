@@ -103,6 +103,19 @@ public:
     }
 
     /**
+     * @brief operator to evaluate to a bool if pointer doesn't exist
+     * @return true if pointer is set, false if not
+     */
+    JUMP_INTEROPABLE
+    explicit operator bool() const {
+        #if JUMP_ON_DEVICE
+            return (buffer_.device_data() != nullptr);
+        #else
+            return (buffer_.host_data() != nullptr);
+        #endif
+    }
+
+    /**
      * @brief access the underlying pointer
      * @return a pointer to the shared object
      */

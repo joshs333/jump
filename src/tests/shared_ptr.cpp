@@ -93,7 +93,7 @@ TEST(TEST_SUITE_NAME, makeSharedOnHost) {
 TEST(TEST_SUITE_NAME, makeSharedOnUnified) {
     bool exception = false;
 
-    try {
+    try { 
         auto ptr = jump::make_shared_on_unified<int>(10);
         ASSERT_EQ(*ptr, 10);
         ASSERT_EQ(*ptr.get(), 10);
@@ -222,6 +222,13 @@ TEST(TEST_SUITE_NAME, functionTestingUnified) {
 
     if constexpr(!jump::cuda_enabled())
         ASSERT_TRUE(exception);
+}
+
+TEST(TEST_SUITE_NAME, boolOperator) {
+    jump::shared_ptr<int> thing;
+    ASSERT_FALSE(thing);
+    thing = jump::make_shared<int>(10);
+    ASSERT_TRUE(thing);
 }
 
 /// THIS WILL NEVER WORK HOW I WANT IT TO!
