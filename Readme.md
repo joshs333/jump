@@ -30,6 +30,7 @@ octree
 - make foreach / iterate callable from device??
 - make cuda calls for multi_array use 3d blocks or whatevs? (easy to hit limit with three dimensional array)
 - flesh out unit tests for parallel, threadpool, new multi_array features with the indices
+- make array / multi_array to not have shared_ptr behavior (change the copy / assignment operators to clone the memory buffer or smthn)
 
 # Foreach kernels
 struct k {
