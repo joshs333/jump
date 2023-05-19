@@ -76,7 +76,7 @@ find_package(Eigen3 REQUIRED)
 
 add_library(${PROJECT_NAME} INTERFACE)
 # We do this instead of compile_features() becase cxx_std_17 feature is not happy with CUDA
-target_compile_options(${PROJECT_NAME} INTERFACE -std=c++17 -O3 -g)
+target_compile_options(${PROJECT_NAME} INTERFACE -std=c++17)
 target_include_directories(${PROJECT_NAME} INTERFACE
     $<BUILD_INTERFACE:${${PROJECT_NAME}_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/${PROJECT_NAME}>

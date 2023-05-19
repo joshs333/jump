@@ -428,12 +428,16 @@ void iteration(
     // recover the index
     std::size_t offset = blockIdx.x * blockDim.x + threadIdx.x;
 
+
     // this can happen if the array size does not perfectly align with block size / warp thread count
     if(offset >= range.offset()) return;
 
     auto my_index = indices::zero(range.dims());
     my_index[range.dims() - 1] = offset;
     my_index %= range;
+
+    if(my_index[0] >= range[0])
+        return;
 
     if constexpr(has_s_kernel) {
         kernel.kernel(my_index);

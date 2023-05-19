@@ -50,7 +50,7 @@ seed_t salt_seed(seed_t seed, seed_t offset) {
     // ^ with some random non-zero sequence
     auto salted_offset = static_cast<seed_t>(seed ^ 0xa73a178dUL) | static_cast<uint64_t>((seed >> 32) ^ 0xb4f25e9dUL);
     // mix up bit with multiplication against an arbitrary odd number
-    return salted_offset * 3477983549775753007ULL;
+    return (offset + salted_offset) * 3477983549775753007ULL;
 }
 
 /**
@@ -80,6 +80,7 @@ public:
      * @note this is normal to construction with prng(const rng_t&), then
      *  calling the seed(const seed_t&) method.
      */
+    JUMP_INTEROPABLE
     prng(const seed_t& seed, const rng_t& alg = rng_t::SPLITMIX):
         alg_(alg),
         seed_(1),
@@ -93,7 +94,7 @@ public:
      * @param alg the algorithm to use
      */
     JUMP_INTEROPABLE
-    prng(const rng_t& alg = rng_t::SPLITMIX):
+    prng(const rng_t& alg = rng_t::XORSHIFT):
         alg_(alg),
         seed_(1),
         inc_(1)
@@ -189,6 +190,7 @@ public:
      * @param mean the mean of this normal distribution
      * @param std_dev the std deviation of this normal distribution
      */
+    JUMP_INTEROPABLE
     normal_distribution(
         const precision_t& mean = 0.0,
         const precision_t& std_dev = 1.0
@@ -206,6 +208,7 @@ public:
      * @return a float number samples from this normal distribution
      */
     template<typename GeneratorT>
+    JUMP_INTEROPABLE
     precision_t operator()(GeneratorT& rng) {
         #ifndef JUMP_DISABLE_BOX_MULLER_EXTRA
             if(has_box_muller_extra_) {
@@ -231,7 +234,8 @@ public:
                     __sincosf(v, &r1, &r2);
                 } else {
                     s = sqrt(-2.0f * log(u));
-                    __sincos(v, &r1, &r2);
+                    r1 = sin(v);
+                    r2 = cos(v);
                 }
             #else
                 if constexpr(std::is_same<precision_t, float>::value) {
@@ -270,6 +274,94 @@ private:
     precision_t box_muller_extra_;
 
 }; /* class normal_distribution */
+
+/**
+ * @brief Samples from the log-normal distribution.
+ * @tparam precision_t The level of precision to use.
+ * @note An explanation of this distrubition can be found [here](https://towardsdatascience.com/log-normal-distribution-a-simple-explanation-7605864fb67c).
+ */
+template<typename precision_t = double >
+class log_normal_distribution {
+public:
+    /**
+     * @brief Construct a new log normal distribution object
+     * @param location the location of this distribution
+     * @param scale the scale of this distribution
+     */
+    JUMP_INTEROPABLE
+    log_normal_distribution(
+        const precision_t& location,
+        const precision_t& scale
+    ):
+        norm_(location, scale)
+    {
+    }
+
+    /**
+     * @brief sample a number from this log-normal distribution
+     * @tparam GeneratorT the type of base rng to use
+     * @param rng the base rng to use
+     * @return a float number samples from this log-normal distribution
+     */
+    template<typename GeneratorT>
+    JUMP_INTEROPABLE
+    precision_t operator()(GeneratorT& rng) {
+        return exp(norm_(rng));
+    }
+
+private:
+    //! A normal distribution we can sample from to get a log normal distribution
+    normal_distribution<precision_t> norm_;
+
+}; /* class log_normal_distribution */
+
+/**
+ * @brief samples from a uniform distribution
+ * @tparam precision_t the level of precision to use
+ */
+template<typename precision_t = double >
+class uniform_distribution {
+public:
+
+    /**
+     * @brief create a new uniform random distribution
+     * @param min the minimum value to sample
+     * @param max the maximum value to sample
+     * @note I implemented this quickly... pretty sure this is inclusive of both bounds?
+     *  but also it's for a real number so the odds of getting them dead on is low
+     */
+    uniform_distribution(
+        const precision_t& min,
+        const precision_t& max
+    ):
+        min_(min),
+        max_(max)
+    {}
+
+    /**
+     * @brief sample a number from this uniform distribution
+     * @tparam GeneratorT the type of base rng to use
+     * @param rng the base rng to use
+     * @return a float number samples from this uniform distribution
+     */
+    template<typename GeneratorT>
+    JUMP_INTEROPABLE
+    precision_t operator()(GeneratorT& rng) {
+        auto n = rng();
+        constexpr auto width = std::numeric_limits<typename GeneratorT::result_type>::max() - std::numeric_limits<typename GeneratorT::result_type>::min();
+        auto offset = n - std::numeric_limits<typename GeneratorT::result_type>::min();
+        
+        return min_ + (max_ - min_) * static_cast<precision_t>(offset) / static_cast<precision_t>(width);
+
+    }
+
+private:
+    //! The minumum value to sample
+    precision_t min_;
+    //! The maximum value to sample
+    precision_t max_;
+
+}; /* class uniform_distribution */
 
 } /* namespace jump */
 

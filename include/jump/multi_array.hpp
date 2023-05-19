@@ -237,7 +237,7 @@ struct multi_indices {
      * @return index value by reference
      */
     JUMP_INTEROPABLE
-    std::size_t& operator[](const std::size_t& dim) {
+    std::size_t& operator[](std::size_t dim) {
         #if JUMP_ON_DEVICE
             assert(dim < dim_count_ && "dim must be less than dim_count_");
         #else
@@ -253,7 +253,7 @@ struct multi_indices {
      * @return index value by const reference
      */
     JUMP_INTEROPABLE
-    const std::size_t& operator[](const std::size_t& dim) const {
+    const std::size_t& operator[](std::size_t dim) const {
         #if JUMP_ON_DEVICE
             assert(dim < dim_count_ && "dim must be less than dim_count_");
         #else
@@ -333,9 +333,11 @@ struct multi_indices {
      *  perforing a modulo over indices representing the size of a multi-array
      * @param other the indices to modulo against
      * @return this class modulo'd
+     * @note I used to pass other by const-reference but index operators would not evaluate
+     *  properly. I'm either crazy, missing something obvious (or insidious) or just maybe there's a compiler bug.
      */
     JUMP_INTEROPABLE
-    multi_indices& operator%=(const multi_indices& other) {
+    multi_indices& operator%=(multi_indices other) {
         if(dim_count_ == 0) return *this;
         for(std::size_t i = 1; i <= dim_count_ - 1; ++i) {
             if (multi_indices_[dim_count_ - i] >= other.multi_indices_[dim_count_ - i]) {
@@ -463,6 +465,9 @@ class multi_array {
 public:
     //! Convenient type, indicies with the same _max_dims as this multi_array
     using indices = multi_indices<_max_dims>;
+
+    //! Convenience type for the value type contained
+    using value_type = T;
 
     multi_array():
         size_(indices::zero(_max_dims))

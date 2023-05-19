@@ -20,6 +20,9 @@ namespace jump {
 template<typename T>
 class array {
 public:
+    //! Convenience type for the value type contained
+    using value_type = T;
+
     /**
      * @brief A small header to an array buffer containing additional information
      *  probably doesn't need to be make into a struct since it only contains one
