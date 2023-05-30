@@ -211,7 +211,7 @@ struct multi_indices {
                 dim_count_ = sizeof...(IndexT) + 1;
                 multi_indices_[0] = val;
                 std::size_t dim = 1;
-                for(const auto p : {vals...}) {
+                for(const auto p : {static_cast<std::size_t>(vals)...}) {
                     multi_indices_[dim++] = static_cast<std::size_t>(p);
                 }
                 for(std::size_t i = dim; i < _max_dims; ++i)
@@ -338,8 +338,8 @@ struct multi_indices {
      */
     JUMP_INTEROPABLE
     multi_indices& operator%=(multi_indices other) {
-        if(dim_count_ == 0) return *this;
-        for(std::size_t i = 1; i <= dim_count_ - 1; ++i) {
+        if(dim_count_ == 0 || dim_count_ == 1) return *this;
+        for(std::size_t i = 1; i < dim_count_; ++i) {
             if (multi_indices_[dim_count_ - i] >= other.multi_indices_[dim_count_ - i]) {
                 if(i < dim_count_) {
                     multi_indices_[dim_count_ - i - 1] += multi_indices_[dim_count_ - i] / other.multi_indices_[dim_count_ - i];
@@ -485,6 +485,26 @@ public:
         const memory_t& location = memory_t::HOST
     ) {
         allocate(dimensions, location);
+
+        for(auto i = 0; i < size(); ++i)
+            new(&buffer_.data<T>()[i]) T();
+    }
+
+    /**
+     * @brief construct a new multi_array with the default initializer 
+     *  for contained objects
+     * @param dimensions the dimensions of the multi-array
+     * @param location memory second to allocate
+     */
+    multi_array(
+        const indices& dimensions,
+        const memory_t& location = memory_t::HOST
+    ) {
+        std::vector<std::size_t> dims(dimensions.dims(), 0);
+        for(auto i = 0; i < dimensions.dims(); ++i) {
+            dims[i] = dimensions[i];
+        }
+        allocate(dims, location);
 
         for(auto i = 0; i < size(); ++i)
             new(&buffer_.data<T>()[i]) T();

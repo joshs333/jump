@@ -26,7 +26,8 @@ struct par {
     enum target_t : uint8_t {
         seq = 0,
         threadpool = 1,
-        cuda = 2
+        cuda = 2,
+        unknown = 3
     };
 
     //! The execution target for the parallelized call
@@ -37,9 +38,46 @@ struct par {
     //! If target == par::cuda, the number of threads per block in the cuda call
     //! TODO(jspisak): dynamically compute this better?
     std::size_t threads_per_block = 256;
+    //! If target == par::cuda whether or not to perform to_device / from_device or trust the external caller to do it
+    bool disable_device_transfers = false;
     // TODO(jspisak): device number (for cuda)
 
+    //! Whether or not to print any debug calls (will be few and far between, this is more for developer use)
+    bool debug = false;
+
+    //! Builder design pattern - set debug
+    par& set_debug(bool value = true) {
+        debug = true;
+        return *this;
+    }
+
+    //! Builder design pattern - set target
+    par& set_target(target_t value) {
+        target = value;
+        return *this;
+    }
+
+    //! Builder design pattern - set disable_device_transfers
+    par& set_disable_device_transfers(bool value = true) {
+        disable_device_transfers = value;
+        return *this;
+    }
+
+    //! Builder design pattern - set thread_count
+    par& set_thread_count(std::size_t value) {
+        thread_count = value;
+        return *this;
+    }
+
 }; /* struct par */
+
+//! The string representation of par::target_t
+static const std::string_view par_target_t_strs[] = {
+    "seq",
+    "threadpool",
+    "cuda",
+    "unknown"
+};
 
 //! Namespace for executors used by foreach or iterate calls to call threadpool
 namespace parallel_executors {
@@ -409,12 +447,14 @@ void multi_array_foreach(
 /**
  * @brief iterate a kernel over a range
  * @tparam kernel_t the kernel to use
+ * @param options the parallel options struct for this call (added for debug purposes, can likely be removed)
  * @param kernel the kernel encoding the function to parallelize over
  * @param range the range to iterate over
  */
 template<typename kernel_t>
 __global__
 void iteration(
+    par options,
     kernel_t kernel,
     indices range
 ) {
@@ -425,19 +465,33 @@ void iteration(
     constexpr bool has_kernel_defined = has_i_kernel || has_i_i_kernel || has_i_i_i_kernel || has_s_kernel;
     static_assert(has_kernel_defined, "kernel_t does not have any proper kernel functions defined.");
 
+    // auto range = rangess;
+
     // recover the index
     std::size_t offset = blockIdx.x * blockDim.x + threadIdx.x;
-
 
     // this can happen if the array size does not perfectly align with block size / warp thread count
     if(offset >= range.offset()) return;
 
     auto my_index = indices::zero(range.dims());
     my_index[range.dims() - 1] = offset;
-    my_index %= range;
+
+    // TODO(jspisak): fix bug??
+    //  when I use this, in some cases it produces a bug where the result is not correct
+    //  then if I remove code in the kernel it fixes the bug.. adding printout statements
+    //  in the operator%= implementation in multi_indices it also fixes it.. much confusing
+    //  honestly I think it's a compiler bug.
+    // my_index = my_index % range;
+
+    //  This was another 'fix'
+    // if(range.dims() > 1)
+    //     my_index %= range
+
+    my_index = my_index.operator%(range);
 
     if(my_index[0] >= range[0])
         return;
+
 
     if constexpr(has_s_kernel) {
         kernel.kernel(my_index);
@@ -500,21 +554,27 @@ void foreach(
                 if constexpr(kernel_interface<kernel_t>::device_compatible()) {
                     // Setup
                     if constexpr(kernel_interface<kernel_t>::to_device_defined()) {
-                        kernel.to_device();
+                        if(!options.disable_device_transfers)
+                            kernel.to_device();
                     }
-                    array.to_device();
+                    if(!options.disable_device_transfers)
+                        array.to_device();
 
                     auto num_blocks = (int) std::ceil(array.size() / static_cast<float>(options.threads_per_block));
 
                     // Call
                     parallel_cuda_kernels::array_foreach<<<num_blocks, options.threads_per_block>>>(kernel, array);
-                    cudaDeviceSynchronize();
+                    auto error = cudaDeviceSynchronize();
+                    if(error != cudaSuccess)
+                        throw jump::cuda_error_exception(error);
 
                     // Cleanup!
                     if constexpr(kernel_interface<kernel_t>::from_device_defined()) {
-                        kernel.from_device();
+                        if(!options.disable_device_transfers)
+                            kernel.from_device();
                     }
-                    array.from_device();
+                    if(!options.disable_device_transfers)
+                        array.from_device();
                 } else {
                     throw jump::device_incompatible_exception("unable to execute foreach call with cuda, kernel incompatible");
                 }
@@ -609,20 +669,26 @@ void foreach(
                 if constexpr(kernel_interface<kernel_t>::device_compatible()) {
                     // Setup
                     if constexpr(kernel_interface<kernel_t>::to_device_defined()) {
-                        kernel.to_device();
+                        if(!options.disable_device_transfers)
+                            kernel.to_device();
                     }
-                    array.to_device();
+                    if(!options.disable_device_transfers)
+                        array.to_device();
 
                     // Call TODO(jspisak): ensure that this method of handling blocks / threads doesn't limit size
                     auto num_blocks = (int) std::ceil(array.size() / static_cast<float>(options.threads_per_block));
                     parallel_cuda_kernels::multi_array_foreach<<<num_blocks, options.threads_per_block>>>(kernel, array);
-                    cudaDeviceSynchronize();
+                    auto error = cudaDeviceSynchronize();
+                    if(error != cudaSuccess)
+                        throw jump::cuda_error_exception(error);
 
                     // Cleanup!
                     if constexpr(kernel_interface<kernel_t>::from_device_defined()) {
-                        kernel.from_device();
+                        if(!options.disable_device_transfers)
+                            kernel.from_device();
                     }
-                    array.from_device();
+                    if(!options.disable_device_transfers)
+                        array.from_device();
                 } else {
                     throw jump::device_incompatible_exception("unable to execute foreach call with cuda, kernel incompatible");
                 }
@@ -703,19 +769,21 @@ void iterate(
                 if constexpr(kernel_interface<kernel_t>::device_compatible()) {
                     // Setup
                     if constexpr(kernel_interface<kernel_t>::to_device_defined()) {
-                        kernel.to_device();
+                        if(!options.disable_device_transfers)
+                            kernel.to_device();
                     }
 
                     // Call TODO(jspisak): ensure that this method of handling blocks / threads doesn't limit size
                     auto num_blocks = (int) std::ceil(range.offset() / static_cast<float>(options.threads_per_block));
-                    parallel_cuda_kernels::iteration<<<num_blocks, options.threads_per_block>>>(kernel, range);
+                    parallel_cuda_kernels::iteration<<<num_blocks, options.threads_per_block>>>(options, kernel, range);
                     auto error = cudaDeviceSynchronize();
                     if(error != cudaSuccess)
                         throw jump::cuda_error_exception(error);
 
                     // Cleanup!
                     if constexpr(kernel_interface<kernel_t>::from_device_defined()) {
-                        kernel.from_device();
+                        if(!options.disable_device_transfers)
+                            kernel.from_device();
                     }
                 } else {
                     throw jump::device_incompatible_exception("unable to execute iterate call with cuda, kernel incompatible");

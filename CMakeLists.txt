@@ -26,6 +26,7 @@ option(JUMP_BUILD_TESTS "Build tests" ON)
 option(JUMP_BUILD_EXAMPLES "Build examples" ON)
 option(JUMP_ENABLE_CUDA "Enable CUDA as a parallelization backend" ON)
 option(JUMP_BUILD_DOCS "Build documentation with doxygen" ON)
+option(JUMP_ENABLE_YAML "Enable yaml-cpp interface inclusion (only necessary for tests / examples to build)" ON)
 
 if(${JUMP_ENABLE_CUDA})
     # include(CheckLanguage)
@@ -49,6 +50,10 @@ include(cmake/jumpMacros.cmake)
 # Includes for installation
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
+
+if(${JUMP_ENABLE_YAML})
+    find_package(yaml-cpp REQUIRED)
+endif()
 
 #####################################################################
 ####################### Documentation Building ######################
@@ -83,11 +88,14 @@ target_include_directories(${PROJECT_NAME} INTERFACE
 )
 target_link_libraries(${PROJECT_NAME} INTERFACE Eigen3::Eigen)
 
+
 #####################################################################
 ####################### Executables #################################
 #####################################################################
 # add_executable(jump_main src/main.cpp)
 # jump_cuda_target(jump_main)
+
+# jump_cuda_executable(jump_reduction_testing src/sandbox/reduction_testing.cpp)
 
 if(${JUMP_BUILD_EXAMPLES})
     message(STATUS "[JUMP] Building Examples")
@@ -100,6 +108,11 @@ if(${JUMP_BUILD_EXAMPLES})
         jump_cuda_executable(jump_octree_example src/examples/octree.cpp)
         jump_cuda_executable(jump_threadpool_example src/examples/threadpool.cpp)
         jump_cuda_executable(jump_random_example src/examples/random.cpp)
+    endif()
+
+    if(${JUMP_ENABLE_YAML})
+        jump_executable(jump_yaml_example src/examples/yaml_example.cpp)
+        target_link_libraries(jump_yaml_example PUBLIC yaml-cpp)
     endif()
 endif()
 

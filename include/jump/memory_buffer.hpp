@@ -15,6 +15,7 @@
 #include <type_traits>
 #include <functional>
 #include <cstring>
+#include <string_view>
 
 // APPLICATION
 #include <jump/device_interface.hpp>
@@ -23,13 +24,23 @@
 namespace jump {
 
 //! Types of memory that can be allocated / managed
-enum class memory_t {
+enum class memory_t : uint8_t {
     //! Memory allocated to the host in the heap
-    HOST,
+    HOST = 0,
     //! Memory allocated to a particular GPU device
-    DEVICE,
+    DEVICE = 1,
     //! Memory allocated to unified memory, available to HOST and DEVICE
-    UNIFIED
+    UNIFIED = 2,
+    //! Max value for memory_t (UNKNOWN memory_t)
+    UNKNOWN = 3
+};
+
+//! String representations for memory_t
+static std::string_view memory_t_str[] = {
+    "HOST",
+    "DEVICE",
+    "UNIFIED",
+    "UNKNOWN"
 };
 
 /**
