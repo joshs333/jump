@@ -414,6 +414,14 @@ public:
     }
 
     /**
+     * @brief access the primary location of this buffer
+     * @return the main location memory is allocated on (if HOST, may also have a DEVICE segment)
+     */
+    memory_t location() const {
+        return block_->location;
+    }
+
+    /**
      * @brief access the buffer
      * @tparam T optional type to cast the buffer pointer to (default void)
      * @param offset the bytes to offset relative to the base pointer

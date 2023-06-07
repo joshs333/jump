@@ -143,9 +143,10 @@ struct array_foreach {
 
             constexpr bool has_index_val_kernel = kernel_interface<kernel_t >::template has_kernel<const std::size_t&, array_t&>();
             constexpr bool has_val_kernel = kernel_interface<kernel_t >::template has_kernel<array_t&>();
+            static_assert(has_index_val_kernel || has_val_kernel, "Kernel must have index, val or index kernel functions");
             if constexpr(has_index_val_kernel)
                 kernel_->kernel(my_index, array_->at(my_index));
-            else
+            else if constexpr(has_val_kernel)
                 kernel_->kernel(array_->at(my_index));
         }
     }

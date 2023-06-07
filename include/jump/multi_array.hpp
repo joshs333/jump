@@ -34,6 +34,7 @@ constexpr bool can_be_size_t() {
         return can_be_size_t_eval<Type>::value && can_be_size_t<Types...>();
     else
         return can_be_size_t_eval<Type>::value;
+    return false;
 }
 
 } /* namespace multi_array_helpers */
@@ -508,6 +509,28 @@ public:
 
         for(auto i = 0; i < size(); ++i)
             new(&buffer_.data<T>()[i]) T();
+    }
+
+    /**
+     * @brief construct a new multi_array initializing members from 
+        a default value as specified
+     * @param dimensions the dimensions of the multi-array
+     * @param default_value the default value to intialize members from
+     * @param location memory second to allocate
+     */
+    multi_array(
+        const indices& dimensions,
+        const T& default_value,
+        const memory_t& location = memory_t::HOST
+    ) {
+        std::vector<std::size_t> dims(dimensions.dims(), 0);
+        for(auto i = 0; i < dimensions.dims(); ++i) {
+            dims[i] = dimensions[i];
+        }
+        allocate(dims, location);
+
+        for(auto i = 0; i < size(); ++i)
+            new(&buffer_.data<T>()[i]) T(default_value);
     }
 
     /**

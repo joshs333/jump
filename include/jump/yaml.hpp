@@ -255,8 +255,8 @@ struct convert<Eigen::Matrix<matrix_t, size_a, size_b, f1, f2, f3>> {
             return false;
         }
         for(std::size_t i = 0; i < rhs.rows() && i < node.size(); ++i) {
-            if(!node.IsSequence()) {
-                rhs(i, 0) = node[i][0].as<matrix_t>();
+            if(!node[i].IsSequence()) {
+                rhs(i, 0) = node[i].as<matrix_t>();
             } else {
                 for(std::size_t j = 0; j < rhs.cols() && j < node[i].size(); ++j) {
                     rhs(i, j) = node[i][j].as<matrix_t>();
