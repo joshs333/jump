@@ -330,6 +330,7 @@ public:
      * @note I implemented this quickly... pretty sure this is inclusive of both bounds?
      *  but also it's for a real number so the odds of getting them dead on is low
      */
+    JUMP_INTEROPABLE
     uniform_distribution(
         const precision_t& min,
         const precision_t& max

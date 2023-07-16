@@ -7,7 +7,17 @@
 
 namespace jump {
 
-template<typename T> 
+namespace reduction_helpers {
+
+
+
+template<typename array_t, typename kernel_t>
+void cuda_reduction_
+
+
+}
+
+template<typename T>
 struct min {
     static T kernel(const T& a, const T& b) {
         if(a < b)
