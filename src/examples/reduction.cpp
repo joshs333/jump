@@ -8,13 +8,6 @@
 namespace jump {
 
 namespace reduction_helpers {
-
-
-
-template<typename array_t, typename kernel_t>
-void cuda_reduction_
-
-
 }
 
 template<typename T>

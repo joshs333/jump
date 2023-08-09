@@ -132,7 +132,7 @@ struct array_foreach {
         // process until all indices have been executed with
         while(true) {
             {
-                std::scoped_lock l(index_mutex_);
+                std::scoped_lock<std::mutex> l(index_mutex_);
                 if(index_ >= array_->size()) {
                     context.shutdown();
                     return;
@@ -216,7 +216,7 @@ struct multi_array_foreach {
         // process until all indices have been executed with
         while(true) {
             {
-                std::scoped_lock l(index_mutex_);
+                std::scoped_lock<std::mutex> l(index_mutex_);
                 if(index_[0] >= array_->shape(0)) {
                     context.shutdown();
                     return;
@@ -308,7 +308,7 @@ struct iteration {
         // process until all indices have been executed with
         while(true) {
             {
-                std::scoped_lock l(index_mutex_);
+                std::scoped_lock<std::mutex> l(index_mutex_);
                 if(index_[0] >= range_[0]) {
                     context.shutdown();
                     return;

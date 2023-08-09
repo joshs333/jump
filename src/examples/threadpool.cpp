@@ -24,7 +24,7 @@ public:
     {}
 
     bool control(jump::threadpool::context& context) const {
-        std::scoped_lock l(queue_mutex_);
+        std::scoped_lock<std::mutex> l(queue_mutex_);
         if(queue_->size() > 0)
             return true;
         context.shutdown();
