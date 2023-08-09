@@ -1,0 +1,11 @@
+<package format="2">
+  <name>jump</name>
+  <version>0.1.0</version>
+  <description>
+    This package provides a C++ multi-processing library.
+  </description>
+  <maintainer email="joshs333@live.com">Joshua Spisak</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>cmake</buildtool_depend>
+</package>
