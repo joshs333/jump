@@ -1,6 +1,6 @@
 /**
  * @file memory_buffer.hpp
- * @author Joshua Spisak (jspisak@andrew.cmu.edu)
+ * @author Joshua Spisak (joshs333@live.com)
  * @brief object containing a raw buffer of memory and controlling it's
  *  location in either host or device memory.
  * @date 2022-10-05
@@ -142,15 +142,12 @@ public:
         * @param buffer_size the new size of the buffer
         */
         void reallocate(std::size_t buffer_size) {
-            if(buffer_size < size) {
-                throw std::runtime_error("buffer reallocation must be to a higher size");
-            }
             if(buffer_size == size) {
                 return;
             }
             auto old_host_data = host_data;
             auto old_device_data = device_data;
-            auto old_buffer_size = size;
+            auto old_buffer_size = size < buffer_size ? size : buffer_size;
             host_data = nullptr;
             device_data = nullptr;
             allocate(buffer_size, location);
@@ -193,6 +190,7 @@ public:
          *  and nullifies all pointers.
          */
         void deallocate() {
+
             if(location == memory_t::UNIFIED) {
                 if(host_data != nullptr) {
                     #ifdef JUMP_ENABLE_CUDA
@@ -231,7 +229,7 @@ public:
          */
         count_t dereference(std::function<void(void)> dealloc_func = nullptr) {
             auto count = --reference_counter;
-            if(count == 0 && host_data != nullptr) {
+            if(count == 0 && (host_data != nullptr || device_data != nullptr)) {
                 if(dealloc_func) {
                     try {
                         dealloc_func();
@@ -270,7 +268,9 @@ public:
                 } else if(location == memory_t::DEVICE) {
                     // we only allow a copy if we have host data to copy from
                     if(host_data == nullptr) {
-                        throw std::runtime_error("Host memory is not allocated, unable to copy to device");
+                        // TODO: revisit this behavior?
+                        return;
+                        // throw std::runtime_error("Host memory is not allocated, unable to copy to device");
                     }
 
                     auto err = cudaMemcpy(device_data, host_data, size, cudaMemcpyHostToDevice);
@@ -379,6 +379,7 @@ public:
      * @return multi_array& this object
      */
     memory_buffer& operator=(memory_buffer&& buf) {
+        dereference();
         block_ = buf.block_;
         device_data_ = buf.device_data_;
         device_size_ = buf.device_size_;
@@ -529,10 +530,13 @@ public:
     JUMP_INTEROPABLE
     std::size_t size() const {
         #if JUMP_ON_DEVICE
-            return device_size_;
+            if(device_size_)
+                return device_size_;
         #else
-            return block_->size;
+            if(block_)
+                return block_->size;
         #endif
+        return 0;
     }
 
     /**
@@ -580,7 +584,7 @@ public:
      */
     void release(
         const std::function<void(void)>& dealloc_func
-    ) {
+    ) { 
         if(!block_)
             return;
         

@@ -1,6 +1,6 @@
 /**
  * @file random.hpp
- * @author Joshua Spisak (jspisak@andrew.cmu.edu)
+ * @author Joshua Spisak (joshs333@live.com)
  * @brief Utilities for interopable random number generation.
  * @date 2023-05-09
  */

@@ -1,6 +1,6 @@
 /**
  * @file threadpool.hpp
- * @author Joshua Spisak (jspisak@andrew.cmu.edu)
+ * @author Joshua Spisak (joshs333@live.com)
  * @brief Defined a threadpool that can parallelize an executor across some number of threads.
  * @date 2023-04-26
  */

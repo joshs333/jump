@@ -303,6 +303,35 @@ TEST(TEST_SUITE_NAME, pushBack) {
     ASSERT_EQ(arr.capacity(), 100);
 }
 
+TEST(TEST_SUITE_NAME, commaOperator) {
+    jump::array<int> arr(5);
+    arr << 1, 2, 3, 4, 5;
+    ASSERT_EQ(arr[0], 1);
+    ASSERT_EQ(arr[1], 2);
+    ASSERT_EQ(arr[2], 3);
+    ASSERT_EQ(arr[3], 4);
+    ASSERT_EQ(arr[4], 5);
+
+    bool exception = false;
+    try {
+        arr << 1, 2, 3, 4, 5, 6;
+    } catch(const std::exception& e) {
+        exception = true;
+    }
+    ASSERT_TRUE(exception);
+}
+
+TEST(TEST_SUITE_NAME, iterator) {
+    jump::array<int> arr(5);
+    arr << 1, 2, 3, 4, 5;
+
+    int value = 1;
+    for(const auto& v : arr) {
+        ASSERT_EQ(value, v);
+        ++value;
+    }
+}
+
 int main(int argc, char **argv) {
     testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();

@@ -1,6 +1,6 @@
 /**
  * @file array.hpp
- * @author Joshua Spisak (jspisak@andrew.cmu.edu)
+ * @author Joshua Spisak (joshs333@live.com)
  * @brief adds an array type that can be used interopably
  * @date 2023-03-17
  */
@@ -13,6 +13,57 @@
 
 namespace jump {
 
+
+/**
+ * @brief a simple helper class to handle comma
+ *  assignment of values into arrays
+ * @tparam T the value type to be assigned
+ */
+template<typename T, std::size_t _max_dims = 4>
+class array_comma_helper {
+public:
+    //! Convenience type for the value type contained
+    using value_type = T;
+
+    /**
+     * @brief construct the helper
+     * @param start_data beginning of data to fill (not assignable)
+     * @param end_data end of data to fill
+     */
+    JUMP_INTEROPABLE
+    array_comma_helper(T* start_data, T* end_data):
+        start_data_(start_data),
+        end_data_(end_data)
+    {}
+
+    /**
+     * @brief assign into array using comma operator
+     * @param value the value to assign
+     */
+    JUMP_INTEROPABLE
+    array_comma_helper& operator,(const T& value) {
+        #if JUMP_ON_DEVICE
+            #if JUMP_ENABLE_DEVICE_BOUNDS_CHECK
+                assert(start_data_ < end_data_ && "Unable to assign into array beyond it's range");
+            #endif
+        #else
+            if(start_data_ >= end_data_)
+                throw std::out_of_range("Unable to assign into array beyond it's range");
+        #endif
+        *start_data_ = value;
+        ++start_data_;
+        return *this;
+    }
+
+private:
+    //! Start data (where to assign)
+    T* start_data_;
+    //! End data (cannot assign here or beyond)
+    T* end_data_;
+
+}; /* class array_comma_helper */
+
+
 /**
  * @brief a single-dimension array of a particular type
  * @tparam T the type of the array
@@ -22,6 +73,105 @@ class array {
 public:
     //! Convenience type for the value type contained
     using value_type = T;
+    //! Type used to express size
+    using size_type = std::size_t;
+    //! Type used to express size difference
+    using difference_type = std::ptrdiff_t;
+    //! Convenience typedef for a reference to the underlying type
+    using reference = T&;
+    //! Convenience typedef for a const-reference to the underlying type
+    using const_reference = const T&;
+    //! Convenience typedef for a pointer to the underlying type
+    using pointer = T*;
+    //! Convenience typedef for a const pointer to the underlying type
+    using const_pointer = const T*;
+
+    /**
+     * @brief an iterator over a continuous buffer
+     *  that is iteropable but can NOT cross the
+     *  CPU / GPU barrier safely.
+     */
+    struct iterator {
+        //! Currently implements forward iterator
+        using iterator_category = std::forward_iterator_tag;
+        //! Same as array::difference_type
+        using difference_type   = array::difference_type;
+        //! Same as array::value_type
+        using value_type        = array::value_type;
+        //! Same as array::pointer
+        using pointer           = array::pointer;
+        //! Same as array::reference
+        using reference         = array::reference;
+
+        /**
+         * @brief construct a new iterator
+         * @param data the data to point to
+         */
+        iterator(
+            pointer data
+        ):
+            data_(data)
+        {}
+
+        /**
+         * @brief convert iterator to a reference
+         * @return reference to the current object
+         */
+        reference operator*() const {
+            return *data_;
+        }
+
+        /**
+         * @brief convert iterator to a pointer
+         * @return pointer to the current object
+         */
+        pointer operator->() {
+            return data_;
+        }
+
+        /**
+         * @brief increment the iterator
+         * @return this iterator by reference (now incremented)
+         */
+        iterator& operator++() {
+            data_++;
+            return *this;
+        }
+
+        /**
+         * @brief increment the iterator
+         * @return an interator still pointing to the previous object
+         */
+        iterator operator++(int) {
+            auto tmp = *this;
+            ++(*this);
+            return tmp;
+        }
+
+        /**
+         * @brief eq operator between iterators
+         * @param a one iterator to compare
+         * @param b another iterator to compare
+         * @return true if same, false if not
+         */
+        friend bool operator== (const iterator& a, const iterator& b) {
+            return a.data_ == b.data_;
+        };
+
+        /**
+         * @brief neq operator between iterators
+         * @param a one iterator to compare
+         * @param b another iterator to compare
+         * @return true if a != b, false if not
+         */
+        friend bool operator!= (const iterator& a, const iterator& b) {
+            return a.data_ != b.data_;
+        };
+
+        //! The current position pointer in the buffer
+        pointer data_;
+
+    }; /* struct iterator */
 
     /**
      * @brief A small header to an array buffer containing additional information
@@ -167,12 +317,30 @@ public:
 
     /**
      * @brief reserve space in the array
-     * @note new_size must be >= capacity();
      * @param new_size the new size to reserve
      */
     void reserve(const std::size_t& new_size) {
         if(new_size == size()) return;
+        if(new_size < size()) {
+            for(std::size_t i = new_size - 1; i < size(); ++i) {
+                at(i).~T();
+            }
+            buffer_.data<buffer_header>()->size = new_size;
+        }
         buffer_.reallocate((new_size * sizeof(T)) + sizeof(buffer_header));
+    }
+
+    /**
+     * @brief remove all elements from the container (does not re-allocate)
+     */
+    void clear() {
+        if(!buffer_.data<buffer_header>()) {
+            return;
+        }
+        for(std::size_t i = 0; i < size(); ++i) {
+            at(i).~T();
+        }
+        buffer_.data<buffer_header>()->size = 0;
     }
 
     /**
@@ -189,6 +357,9 @@ public:
      */
     JUMP_INTEROPABLE
     std::size_t size() const {
+        if(!buffer_.data<buffer_header>()) {
+            return 0;
+        }
         return buffer_.data<buffer_header>()->size;
     }
 
@@ -242,7 +413,6 @@ public:
         return buffer_.data<T>(sizeof(buffer_header))[index];
     }
 
-
     /**
      * @brief index operator
      * @param index the index to access
@@ -261,6 +431,33 @@ public:
     JUMP_INTEROPABLE
     T& operator[](const std::size_t& index) const {
         return at(index);
+    }
+
+    /**
+     * @brief assign into multi_array_view using istream and comma operator
+     * @param value the first value to assign
+     * @return a comma helper that can take values via the comma operator to assign into the multi_array
+     */
+    JUMP_INTEROPABLE
+    array_comma_helper<T> operator<<(const T& value) const {
+        auto ptr = buffer_.data<T>(sizeof(buffer_header));
+        return array_comma_helper<T>(ptr, ptr + size()), value;
+    }
+
+    /**
+     * @brief get a begin iterator
+     * @return iterator that points to the first element
+     */
+    iterator begin() const {
+        return iterator(buffer_.data<T>(sizeof(buffer_header)));
+    }
+
+    /**
+     * @brief get an end iterator
+     * @return iterator that points just past the last element :)
+     */
+    iterator end() const {
+        return iterator(buffer_.data<T>(sizeof(buffer_header)) + size());
     }
 
     /**
@@ -311,6 +508,14 @@ public:
     JUMP_INTEROPABLE
     const memory_buffer& buffer() const {
         return buffer_;
+    }
+
+    /**
+     * @brief access the primary location of this array
+     * @return the main location memory is allocated on (if HOST, may also have a DEVICE segment)
+     */
+    memory_t location() const {
+        return buffer_.location();
     }
 
 private:

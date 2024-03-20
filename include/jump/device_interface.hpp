@@ -1,6 +1,6 @@
 /**
  * @file device_interface.hpp
- * @author Joshua Spisak (jspisak@andrew.cmu.edu)
+ * @author Joshua Spisak (joshs333@live.com)
  * @brief utilities to see if devices are available (at build / compile time)
  *  and macros / enums to simplify device interfacing / interopability
  * @date 2022-07-25
@@ -41,15 +41,11 @@
     #define JUMP_ON_DEVICE false
 #endif
 
+//! Whether or not to run array bounds checking on the GPU (easier to debug when enabled, faster code when disabled)
+#define JUMP_ENABLE_DEVICE_BOUNDS_CHECK true
+
 //! Just Multi-Processing namespace
 namespace jump {
-
-//! Internal variable for if the device count is evaluated
-bool _cuda_eval = false;
-//! Internal variable for if cuda is available (valid after _cuda_eval = true)
-bool _cuda_available = false;
-//! Internal variable for number of devices available (valid after _cuda_eval = true)
-int _device_count = 0;
 
 /**
  * @brief a constexpr evaluation of if CUDA is enabled
@@ -71,15 +67,15 @@ constexpr bool cuda_enabled() {
  */
 inline bool devices_available() {
     #ifdef JUMP_ENABLE_CUDA
+        int _device_count = 0;
+
         auto r = cudaGetDeviceCount(&_device_count);
         if(r != 0)
-            return _cuda_available;
+            return false;
         if(_device_count > 0)
-            _cuda_available = true;
-        return _cuda_available;
-    #else
-        return false;
+            return true;
     #endif
+    return false;
 
     // We don't need to do this because of static linkage - but if we wanted
     // we could do runtime library loading / checking
@@ -125,12 +121,13 @@ inline bool devices_available() {
  */
 inline int device_count() {
     #ifdef JUMP_ENABLE_CUDA
-        if(!_cuda_eval)
-            devices_available();
-        return _device_count;
-    #else
-        return 0;
+        int _device_count = 0;
+
+        auto r = cudaGetDeviceCount(&_device_count);
+        if(r == 0)
+            return _device_count;
     #endif
+    return 0;
 } /* cuda_device_count() */
 
 /**
@@ -509,6 +506,16 @@ public:
     std::string message_;
 
 }; /* class device_incompatible_exception */
+
+inline
+void synchronize() {
+    #ifdef JUMP_ENABLE_CUDA
+        auto e = cudaDeviceSynchronize();
+        if(e != cudaSuccess) {
+            throw cuda_error_exception(e, "on synchronize");
+        }
+    #endif
+}
 
 } /* namespace jump */
 

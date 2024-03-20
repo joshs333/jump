@@ -1,6 +1,6 @@
 /**
  * @file yaml.hpp
- * @author Joshua Spisak
+ * @author Joshua Spisak (joshs333@live.com)
  * @brief Definitions to allow container to read / write to yaml with yaml-cpp.
  * @date 2023-05-23
  */

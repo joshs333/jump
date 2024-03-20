@@ -148,6 +148,18 @@ if(${JUMP_BUILD_TESTS})
 
         jump_cuda_executable(jump_multi_array_test src/tests/multi_array.cpp)
         jump_test(jump_multi_array_test)
+
+        jump_cuda_executable(jump_string_view_test src/tests/string_view.cpp)
+        jump_test(jump_string_view_test)
+
+        jump_cuda_executable(jump_string_test src/tests/string.cpp)
+        jump_test(jump_string_test)
+
+        jump_cuda_executable(jump_atomic_test src/tests/atomic.cpp)
+        jump_test(jump_atomic_test)
+
+        jump_cuda_executable(jump_variant_test src/tests/variant.cpp)
+        jump_test(jump_variant_test)
     endif()
 
     add_executable(jump_memory_buffer_test_no_cuda src/tests/memory_buffer.cpp)
@@ -158,6 +170,15 @@ if(${JUMP_BUILD_TESTS})
 
     add_executable(jump_shared_ptr_test_no_cuda src/tests/shared_ptr.cpp)
     jump_test(jump_shared_ptr_test_no_cuda)
+
+    add_executable(jump_multi_array_test_no_cuda src/tests/multi_array.cpp)
+    jump_test(jump_multi_array_test_no_cuda)
+
+    add_executable(jump_string_view_test_no_cuda src/tests/string_view.cpp)
+    jump_test(jump_string_view_test_no_cuda)
+
+    add_executable(jump_string_test_no_cuda src/tests/string.cpp)
+    jump_test(jump_string_test_no_cuda)
 
     add_custom_target(jump_lcov
         COMMAND lcov --no-external --directory . --capture --output-file build/coverage.info

@@ -1,6 +1,6 @@
 /**
  * @file parallel.hpp
- * @author Joshua Spisak (jspisak@andrew.cmu.edu)
+ * @author Joshua Spisak (joshs333@live.com)
  * @brief Various utilities for interopable parallel processing
  *  that can run sequentially or in parallel with a threadpool
  *  or cuda backend.

@@ -83,7 +83,6 @@ public:
 
             cudaMemcpy(&result, device_result_ptr, sizeof(typename Test::TestResult), cudaMemcpyDeviceToHost);
             cudaFree(device_result_ptr);
-            
             return result;
         #else
             throw std::runtime_error("Cuda is not available to run device test");

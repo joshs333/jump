@@ -83,6 +83,7 @@ TEST(TEST_SUITE_NAME, allocateVoidDevice) {
         ASSERT_TRUE(buf.data() == nullptr);
         ASSERT_FALSE(buf.device_data() == nullptr);
     } catch(std::exception& e) {
+        std::printf("%s\n", e.what());
         exception = true;
     }
     if constexpr(jump::cuda_enabled()) {

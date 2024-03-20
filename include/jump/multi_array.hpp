@@ -1,6 +1,6 @@
 /**
  * @file multi_array.hpp
- * @author Joshua Spisak (jspisak@andrew.cmu.edu)
+ * @author Joshua Spisak (joshs333@live.com)
  * @brief A multi-dimensional array over some memory buffer.
  * @date 2023-04-25
  */
@@ -11,6 +11,7 @@
 #include <jump/memory_buffer.hpp>
 
 // STD
+#include <chrono>
 #include <limits>
 
 namespace jump {
@@ -173,11 +174,6 @@ struct multi_indices {
         result.dim_count_ = size;
         return result;
     }
-
-    // TODO: Define conversion!
-    // template<std::size_t _other_dims>
-    // multi_indices(const multi_indices& other_multi_indices) {
-    // }
 
     /**
      * @brief default constructor for multi_indices - 0 out each index
@@ -456,6 +452,335 @@ struct multi_indices {
 using indices = multi_indices<>;
 
 /**
+ * @brief a simple helper class to handle comma
+ *  assignment of values into multi_arrays
+ * @tparam T the value type to be assigned
+ */
+template<typename T, std::size_t _max_dims = 4>
+class multi_array_comma_helper {
+public:
+    //! Convenient type, indicies with the same _max_dims as this multi_array
+    using indices = multi_indices<_max_dims>;
+
+    //! Convenience type for the value type contained
+    using value_type = T;
+
+    /**
+     * @brief construct the helper
+     * @param start_data beginning of data to fill (not assignable)
+     * @param end_data end of data to fill
+     */
+    JUMP_INTEROPABLE
+    multi_array_comma_helper(T* start_data, T* end_data):
+        start_data_(start_data),
+        end_data_(end_data)
+    {}
+
+    /**
+     * @brief assign into multi_array using comma operator
+     * @param value the value to assign
+     */
+    JUMP_INTEROPABLE
+    multi_array_comma_helper& operator,(const T& value) {
+        #if JUMP_ON_DEVICE
+            #if JUMP_ENABLE_DEVICE_BOUNDS_CHECK
+                assert(start_data_ < end_data_ && "Unable to assign into multi_array beyond it's range");
+            #endif
+        #else
+            if(start_data_ >= end_data_)
+                throw std::out_of_range("Unable to assign into multi_array beyond it's range");
+        #endif
+        *start_data_ = value;
+        ++start_data_;
+        return *this;
+    }
+
+private:
+    //! Start data (where to assign)
+    T* start_data_;
+    //! End data (cannot assign here or beyond)
+    T* end_data_;
+
+}; /* class multi_array_comma_helper */
+
+
+/**
+ * @brief a weak-pointer view of data from a multi-array with the same interface
+ * @tparam T the type of object that is being held
+ * @tparam _max_dims the maximum number of dimensions for this container
+ */
+template<typename T, std::size_t _max_dims = 4>
+class multi_array_view {
+public:
+    //! Convenient type, indicies with the same _max_dims as this multi_array
+    using indices = multi_indices<_max_dims>;
+
+    //! Convenience type for the value type contained
+    using value_type = T;
+
+    //! Construct an empty (null) multi_array_view
+    JUMP_INTEROPABLE
+    multi_array_view():
+        data_(nullptr),
+        size_(indices::zero(_max_dims))
+    {
+    }
+
+    /**
+     * @brief Construct a new multi array view object
+     * @param data the raw buffer of data to point to
+     * @param dimensions the dimensions of the buffer
+     * @note while this is intended to be used in concert
+     *  with the multi_array, this could be used to wrap
+     *  any array, pretty cool write? haha
+     */
+    JUMP_INTEROPABLE
+    multi_array_view(
+        T* data,
+        const indices& dimensions
+    ):
+        data_(data),
+        size_(dimensions)
+    {}
+
+    /**
+     * @brief gets the number of dimensions of this multi_array
+     * @return std::size_t the number of dimensions 
+     */
+    JUMP_INTEROPABLE
+    std::size_t dims() const {
+        return size_.dims();
+    }
+
+    /**
+     * @brief access the shape with an multi_indices representation
+     * @return multi_indices containg the sizes of all dimensions
+     */
+    JUMP_INTEROPABLE
+    multi_indices<_max_dims> shape() const {
+        return size_;
+    }
+
+    /**
+     * @brief get a zero index indices
+     * @return multi_indices of the same type used by this multi_array with all zeros
+     */
+    JUMP_INTEROPABLE
+    multi_indices<_max_dims> zero() const {
+        auto result = multi_indices<_max_dims>();
+        result.dim_count_ = size_.dims();
+        return result;
+    }
+
+    /**
+     * @brief gets the shape of the array (size of a given dimension)
+     * @param dim the index of the dimension to get the size for,
+     *  must be <= dims();
+     * @return the size of dimension dim
+     */
+    JUMP_INTEROPABLE
+    std::size_t shape(const std::size_t& dim) const {
+        #if JUMP_ON_DEVICE
+            #if JUMP_ENABLE_DEVICE_BOUNDS_CHECK
+                assert(dim < size_.dims());
+            #endif
+        #else
+            if (dim >= size_.dims())
+                throw std::out_of_range("dim " + std::to_string(dim) + " >= dims " + std::to_string(size_.dims()));
+        #endif
+        return size_[dim];
+    }
+
+    /**
+     * @brief gets the size (total number of all elements contained) of the multi_array
+     * @return the size 
+     */
+    JUMP_INTEROPABLE
+    std::size_t size() const {
+        std::size_t result = 1;
+        for(std::size_t i = 0; i < size_.dims(); ++i) {
+            result *= size_[i];
+        }
+        return result;
+    }
+
+    /**
+     * @brief access an element
+     * @tparam IndexT the type used to express index
+     * @param vals index values
+     * @return the element in the multi_array at multi_indices by reference
+     * @note BIG TODO(jspisak): handling where sizeof...(IndexT) < dims()
+     */
+    template<typename... IndexT>
+    JUMP_INTEROPABLE
+    T& at(const IndexT&... vals) const {
+        static_assert(multi_array_helpers::can_be_size_t<IndexT...>(), "all IndexT must be castable to std::size_t");
+        // wrapping the rest in this constexpr cleans up the error output if the static_assert fails :)
+        if constexpr(multi_array_helpers::can_be_size_t<IndexT...>()) {
+            #if JUMP_ON_DEVICE
+                #if JUMP_ENABLE_DEVICE_BOUNDS_CHECK
+                    assert(sizeof...(IndexT) <= size_.dims() && "at() operator is requesting a dimension greater than is possible");
+                #endif
+            #else
+                if(sizeof...(IndexT) > size_.dims())
+                    throw std::out_of_range("requested dimensions " + std::to_string(sizeof...(IndexT)) + " >= dims " + std::to_string(size_.dims()));
+            #endif
+
+            return at(multi_indices(vals...));
+        }
+    }
+
+    /**
+     * @brief access an element
+     * @param vals the index values
+     * @return the element in the multi_array at the multi_indices (by reference)
+     * @note BIG TODO(jspisak): handling where vals.dims() < dims()
+     */
+    JUMP_INTEROPABLE
+    T& at(const multi_indices<_max_dims>& vals) const {
+        #if not JUMP_ON_DEVICE or JUMP_ENABLE_DEVICE_BOUNDS_CHECK
+            for(std::size_t current_dim = 0; current_dim < size_.dims() && current_dim < vals.dims(); ++current_dim) {
+                #if JUMP_ON_DEVICE
+                    assert(vals[current_dim] < size_[current_dim] && "at() operator is requesting an index greater than is possible");
+                #else
+                    if(vals[current_dim] >= size_[current_dim])
+                        throw std::out_of_range("index for dim " + std::to_string(current_dim) + ", " + std::to_string(vals[current_dim]) + " >= " + std::to_string(size_[current_dim]));
+                #endif
+            }
+        #endif
+
+        auto index = multi_indices_to_index(vals);
+        return data_[index];
+    }
+
+    /**
+     * @brief index into the array (ignore dimensions)
+     * @param idx the index of element to get
+     * @return element in array by referece
+     */
+    JUMP_INTEROPABLE
+    T& operator[](const std::size_t& idx) const {
+        #if not JUMP_ON_DEVICE or JUMP_ENABLE_DEVICE_BOUNDS_CHECK
+            #if JUMP_ON_DEVICE
+                assert(idx < size() && "[] operator is requesting an index greater than is possible");
+            #else
+                if(idx >= size())
+                    throw std::out_of_range("index " + std::to_string(idx) + " >= " + std::to_string(size()));
+            #endif
+        #endif
+
+        return data_[idx];
+    }
+
+    /**
+     * @brief assign into multi_array_view using istream and comma operator
+     * @param value the first value to assign
+     * @return a comma helper that can take values via the comma operator to assign into the multi_array
+     */
+    JUMP_INTEROPABLE
+    multi_array_comma_helper<T> operator<<(const T& value) const {
+        return multi_array_comma_helper<T>(data_, data_ + size()), value;
+    }
+
+    /**
+     * @brief view a portion of the array
+     * @tparam IndexT the type used to express index
+     * @param vals index values (should be one dimension less than multi_array dims())
+     *  when dim of vals == dims(), it should be an at operation.
+     * @return a view of the section of the array indexed at view 
+     */
+    template<typename... IndexT>
+    JUMP_INTEROPABLE
+    multi_array_view<T, _max_dims> view(const IndexT&... vals) const {
+        static_assert(multi_array_helpers::can_be_size_t<IndexT...>(), "all IndexT must be castable to std::size_t");
+        // wrapping the rest in this constexpr cleans up the error output if the static_assert fails :)
+        if constexpr(multi_array_helpers::can_be_size_t<IndexT...>()) {
+            #if JUMP_ON_DEVICE
+                #if JUMP_ENABLE_DEVICE_BOUNDS_CHECK
+                    assert(sizeof...(IndexT) <= size_.dims() && "view() operator is requesting a dimension greater than is possible");
+                #endif
+            #else
+                if(sizeof...(IndexT) > size_.dims())
+                    throw std::out_of_range("requested dimensions " + std::to_string(sizeof...(IndexT)) + " >= dims " + std::to_string(size_.dims()));
+            #endif
+
+            return view(multi_indices(vals...));
+        }
+    }
+
+    /**
+     * @brief view a portion of the array
+     * @param vals index values (should be one dimension less than multi_array dims())
+     *  when dim of vals == dims(), it should be an at operation.
+     * @return a view of the section of the array indexed at view 
+     */
+    JUMP_INTEROPABLE
+    multi_array_view<T, _max_dims> view(const multi_indices<_max_dims>& vals) const {
+        #if not JUMP_ON_DEVICE or JUMP_ENABLE_DEVICE_BOUNDS_CHECK
+            for(std::size_t current_dim = 0; current_dim < size_.dims() && current_dim < vals.dims(); ++current_dim) {
+                #if JUMP_ON_DEVICE
+                    assert(vals[current_dim] < size_[current_dim] && "view() operator is requesting an index greater than is possible");
+                #else
+                    if(vals[current_dim] >= size_[current_dim])
+                        throw std::out_of_range("index for dim " + std::to_string(current_dim) + ", " + std::to_string(vals[current_dim]) + " >= " + std::to_string(size_[current_dim]));
+                #endif
+            }
+            #if JUMP_ON_DEVICE
+                assert(vals.dims() < size_.dims() && "view() operator must view less than the available dimensions");
+            #else
+                if(vals.dims() >= size_.dims())
+                    throw std::out_of_range("view() operator must view less than the available dimensions");
+            #endif
+        #endif
+
+        indices size = indices::zero(size_.dims() - vals.dims());
+        for(std::size_t i = vals.dims(); i < size_.dims(); ++i)
+            size[i - vals.dims()] = size_[i];
+
+        auto index = multi_indices_to_index(vals);
+        auto data_ptr = data_ + index;
+        return multi_array_view(data_ptr, size);
+    }
+
+    /**
+     * @brief returns a weak-ptr reference view of the array
+     * @return a view of the whole multi-array
+     */
+    JUMP_INTEROPABLE
+    multi_array_view<T, _max_dims> view() const {
+        return multi_array_view(data_, size_);
+    }
+
+private:
+    /**
+     * @brief performs a conversion from multi_indices to index in the buffer
+     * @param index_vals the multi_indices into the array
+     * @return std::size_t the index into the buffer the multi_indices represent
+     * @note this has no range checking - if we are performing operations
+     *  where range is already guaranteed to be safe then we can save
+     *  some computation using this instead of something like at()
+     */
+    JUMP_INTEROPABLE
+    std::size_t multi_indices_to_index(const multi_indices<_max_dims>& index_vals) const {
+        std::size_t index = 0;
+        for(std::size_t current_dim = 0; current_dim < dims() && current_dim < index_vals.dims(); ++current_dim) {
+            std::size_t multiplier = 1;
+            for(std::size_t i = current_dim + 1; i < dims(); ++i) {
+                multiplier *= size_[i];
+            }
+            index += index_vals[current_dim] * multiplier;
+        }
+        return index;
+    }
+
+    //! Pointer 
+    T* data_;
+    //! Size information for this view
+    multi_indices<_max_dims> size_;
+
+}; /* class multi_array_view */
+
+/**
  * @brief container class that is able to hold multi-dimensional
  *  arrays that are fixed after creation of the array
  * @tparam T the type of object that is being held
@@ -487,8 +812,12 @@ public:
     ) {
         allocate(dimensions, location);
 
-        for(auto i = 0; i < size(); ++i)
-            new(&buffer_.data<T>()[i]) T();
+        if constexpr(!std::is_fundamental<T>::value) {
+            if(location != memory_t::DEVICE) {
+                for(auto i = 0; i < size(); ++i)
+                    new(&buffer_.data<T>()[i]) T();
+            }
+        }
     }
 
     /**
@@ -507,8 +836,12 @@ public:
         }
         allocate(dims, location);
 
-        for(auto i = 0; i < size(); ++i)
-            new(&buffer_.data<T>()[i]) T();
+        if constexpr(!std::is_fundamental<T>::value) {
+            if(location != memory_t::DEVICE) {
+                for(auto i = 0; i < size(); ++i)
+                    new(&buffer_.data<T>()[i]) T();
+            }
+        }
     }
 
     /**
@@ -529,8 +862,9 @@ public:
         }
         allocate(dims, location);
 
-        for(auto i = 0; i < size(); ++i)
-            new(&buffer_.data<T>()[i]) T(default_value);
+        if(location != memory_t::DEVICE)
+            for(auto i = 0; i < size(); ++i)
+                new(&buffer_.data<T>()[i]) T(default_value);
     }
 
     /**
@@ -547,9 +881,24 @@ public:
     ) {
         allocate(dimensions, location);
 
-        for(auto i = 0; i < size(); ++i)
-            buffer_.data<T>()[i] = default_value;
+        if(location != memory_t::DEVICE)
+            for(auto i = 0; i < size(); ++i)
+                buffer_.data<T>()[i] = default_value;
     }
+
+    /**
+     * @brief allows direct assignment of the multi array to a buffer
+     *  with a specified size
+     * @param buffer the buffer to assign
+     * @param size the size to assign
+     */
+    multi_array(
+        const memory_buffer& buffer,
+        const indices& size
+    ):
+        buffer_(buffer),
+        size_(size)
+    {}
 
     /**
      * @brief copy-construct a new multi_array
@@ -603,6 +952,20 @@ public:
     }
 
     /**
+     * @brief allows recasting the multi array to different types
+     *  by changing the pointer type of the multi_array
+     * @tparam O the type to change to
+     * @return multi_array<O, _max_dims>
+     */
+    template<typename O>
+    multi_array<O, _max_dims> recast() const {
+        static_assert(sizeof(O) == sizeof(T), "Can only recast multiarrays to objects of the same size.");
+        static_assert(std::is_fundamental<O>::value, "Can only recast multiarrays to fundamental types.");
+        static_assert(std::is_fundamental<T>::value, "Can only recast multiarrays from fundamental types.");
+        return multi_array<O, _max_dims>(buffer_, size_);
+    }
+
+    /**
      * @brief gets the number of dimensions of this multi_array
      * @return std::size_t the number of dimensions 
      */
@@ -640,7 +1003,9 @@ public:
     JUMP_INTEROPABLE
     std::size_t shape(const std::size_t& dim) const {
         #if JUMP_ON_DEVICE
-            assert(dim < size_.dims());
+            #if JUMP_ENABLE_DEVICE_BOUNDS_CHECK
+                assert(dim < size_.dims());
+            #endif
         #else
             if (dim >= size_.dims())
                 throw std::out_of_range("dim " + std::to_string(dim) + " >= dims " + std::to_string(size_.dims()));
@@ -674,12 +1039,13 @@ public:
         static_assert(multi_array_helpers::can_be_size_t<IndexT...>(), "all IndexT must be castable to std::size_t");
         // wrapping the rest in this constexpr cleans up the error output if the static_assert fails :)
         if constexpr(multi_array_helpers::can_be_size_t<IndexT...>()) {
-            const std::size_t n = sizeof...(IndexT);
             #if JUMP_ON_DEVICE
-                assert(n <= size_.dims() && "at() operator is requesting a dimension greater than is possible");
+                #if JUMP_ENABLE_DEVICE_BOUNDS_CHECK
+                    assert(sizeof...(IndexT) <= size_.dims() && "at() operator is requesting a dimension greater than is possible");
+                #endif
             #else
-                if(n > size_.dims())
-                    throw std::out_of_range("requested dimensions " + std::to_string(n) + " >= dims " + std::to_string(size_.dims()));
+                if(sizeof...(IndexT) > size_.dims())
+                    throw std::out_of_range("requested dimensions " + std::to_string(sizeof...(IndexT)) + " >= dims " + std::to_string(size_.dims()));
             #endif
 
             return at(multi_indices(vals...));
@@ -694,17 +1060,128 @@ public:
      */
     JUMP_INTEROPABLE
     T& at(const multi_indices<_max_dims>& vals) const {
-        for(std::size_t current_dim = 0; current_dim < size_.dims() && current_dim < vals.dims(); ++current_dim) {
-            #if JUMP_ON_DEVICE
-                assert(vals[current_dim] < size_[current_dim] && "at() operator is requesting an index greater than is possible");
-            #else
-                if(vals[current_dim] >= size_[current_dim])
-                    throw std::out_of_range("index for dim " + std::to_string(current_dim) + ", " + std::to_string(vals[current_dim]) + " >= " + std::to_string(size_[current_dim]));
-            #endif
-        }
+        #if not JUMP_ON_DEVICE or JUMP_ENABLE_DEVICE_BOUNDS_CHECK
+            for(std::size_t current_dim = 0; current_dim < size_.dims() && current_dim < vals.dims(); ++current_dim) {
+                #if JUMP_ON_DEVICE
+                    assert(vals[current_dim] < size_[current_dim] && "at() operator is requesting an index greater than is possible");
+                #else
+                    if(vals[current_dim] >= size_[current_dim])
+                        throw std::out_of_range("index for dim " + std::to_string(current_dim) + ", " + std::to_string(vals[current_dim]) + " >= " + std::to_string(size_[current_dim]));
+                #endif
+            }
+        #endif
 
         auto index = multi_indices_to_index(vals);
         return buffer_.data<T>()[index];
+    }
+
+    /**
+     * @brief index into the array (ignore dimensions)
+     * @param index the index of element to get
+     * @return element in array by referece
+     */
+    JUMP_INTEROPABLE
+    T& operator[](const std::size_t& index) const {
+        #if not JUMP_ON_DEVICE or JUMP_ENABLE_DEVICE_BOUNDS_CHECK
+            #if JUMP_ON_DEVICE
+                assert(index < size() && "[] operator is requesting an index greater than is possible");
+            #else
+                if(index >= size())
+                    throw std::out_of_range("index " + std::to_string(index) + " >= " + std::to_string(size()));
+            #endif
+        #endif
+
+        return buffer_.data<T>()[index];
+    }
+
+    /**
+     * @brief assign into multi_array using istream and comma operator
+     * @param value the first value to assign
+     * @return a comma helper that can take values via the comma operator to assign into the multi_array
+     */
+    JUMP_INTEROPABLE
+    multi_array_comma_helper<T> operator<<(const T& value) const {
+        auto ptr = buffer_.data<T>();
+        return multi_array_comma_helper<T>(ptr, ptr + size()), value;
+    }
+
+    /**
+     * @brief view a portion of the array
+     * @tparam IndexT the type used to express index
+     * @param vals index values (should be one dimension less than multi_array dims())
+     *  when dim of vals == dims(), it should be an at operation.
+     * @return a view of the section of the array indexed at view 
+     */
+    template<typename... IndexT>
+    JUMP_INTEROPABLE
+    multi_array_view<T, _max_dims> view(const IndexT&... vals) const {
+        static_assert(multi_array_helpers::can_be_size_t<IndexT...>(), "all IndexT must be castable to std::size_t");
+        // wrapping the rest in this constexpr cleans up the error output if the static_assert fails :)
+        if constexpr(multi_array_helpers::can_be_size_t<IndexT...>()) {
+            #if JUMP_ON_DEVICE
+                #if JUMP_ENABLE_DEVICE_BOUNDS_CHECK
+                    assert(sizeof...(IndexT) <= size_.dims() && "view() operator is requesting a dimension greater than is possible");
+                #endif
+            #else
+                const std::size_t n = sizeof...(IndexT);
+                if(n > size_.dims())
+                    throw std::out_of_range("requested dimensions " + std::to_string(n) + " >= dims " + std::to_string(size_.dims()));
+            #endif
+
+            return view(multi_indices(vals...));
+        }
+    }
+
+    /**
+     * @brief view a portion of the array
+     * @param vals index values (should be one dimension less than multi_array dims())
+     *  when dim of vals == dims(), it should be an at operation.
+     * @return a view of the section of the array indexed at view 
+     */
+    JUMP_INTEROPABLE
+    multi_array_view<T, _max_dims> view(const multi_indices<_max_dims>& vals) const {
+        #if not JUMP_ON_DEVICE or JUMP_ENABLE_DEVICE_BOUNDS_CHECK
+            for(std::size_t current_dim = 0; current_dim < size_.dims() && current_dim < vals.dims(); ++current_dim) {
+                #if JUMP_ON_DEVICE
+                    assert(vals[current_dim] < size_[current_dim] && "view() operator is requesting an index greater than is possible");
+                #else
+                    if(vals[current_dim] >= size_[current_dim])
+                        throw std::out_of_range("index for dim " + std::to_string(current_dim) + ", " + std::to_string(vals[current_dim]) + " >= " + std::to_string(size_[current_dim]));
+                #endif
+            }
+            #if JUMP_ON_DEVICE
+                assert(vals.dims() < size_.dims() && "view() operator must view less than the available dimensions");
+            #else
+                if(vals.dims() >= size_.dims())
+                    throw std::out_of_range("view() operator must view less than the available dimensions");
+            #endif
+        #endif
+
+        indices size = indices::zero(size_.dims() - vals.dims());
+        for(std::size_t i = vals.dims(); i < size_.dims(); ++i)
+            size[i - vals.dims()] = size_[i];
+
+        auto index = multi_indices_to_index(vals);
+        auto data_ptr = buffer_.data<T>() + index;
+        return multi_array_view(data_ptr, size);
+    }
+
+    /**
+     * @brief returns a weak-ptr reference view of the array
+     * @return a view of the whole multi-array
+     */
+    JUMP_INTEROPABLE
+    multi_array_view<T, _max_dims> view() const {
+        return multi_array_view(buffer_.data<T>(), size_);
+    }
+
+    /**
+     * @brief allow implicit conversion to a multi_array_view
+     * @return a view of the whole multi-array
+     */
+    JUMP_INTEROPABLE
+    operator multi_array_view<T, _max_dims>() const {
+        return view();
     }
 
     /**
@@ -734,6 +1211,14 @@ public:
      */
     const memory_buffer& buffer() const {
         return buffer_;
+    }
+
+    /**
+     * @brief access the primary location of this multi_array
+     * @return the main location memory is allocated on (if HOST, may also have a DEVICE segment)
+     */
+    memory_t location() const {
+        return buffer_.location();
     }
 
 private:
@@ -786,25 +1271,26 @@ private:
      */
     void dereference_buffer() {
         buffer_.release([&](){
-            for(std::size_t i = 0; i < size(); ++i) {
-                std::exception e;
-                auto ex = false;
-                try {
-                    buffer_.data<T>()[i].~T();
-                } catch(std::exception& er) {
-                    e = er;
+            if constexpr(!std::is_fundamental<T>::value) {
+                if(buffer_.location() != memory_t::DEVICE) {
+                    for(std::size_t i = 0; i < size(); ++i) {
+                        std::exception e;
+                        auto ex = false;
+                        try {
+                            buffer_.data<T>()[i].~T();
+                        } catch(std::exception& er) {
+                            e = er;
+                        }
+                        if(ex)
+                            throw e;
+                    }
                 }
-                if(ex)
-                    throw e;
             }
         });
     }
 
     //! Track the size of the array
     multi_indices<_max_dims> size_;
-    // std::size_t size_[_max_dims];
-    // //! Track the actual number of dimensions (must be <= _max_dims)
-    // std::size_t dims_;
     //! The buffer containing all contained object data
     memory_buffer buffer_;
 

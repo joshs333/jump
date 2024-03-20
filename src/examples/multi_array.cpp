@@ -16,7 +16,7 @@ void r(jump::multi_array<int> t) {
 int main(int argc, char** argv) {
     std::printf("At beginning\n");
 
-    jump::multi_array<int> a({5, 5});
+    jump::multi_array<int> a({5, 5}, jump::memory_t::UNIFIED);
     a.at(0, 0) = 1;
     std::printf("%d\n", a.at(0, 0));
     // a.to_device();
